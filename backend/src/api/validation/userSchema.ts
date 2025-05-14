@@ -63,7 +63,7 @@ const nameValidator = yup.string()
     'Name must contain only letters and spaces'
   );
 
-// Registration schema
+// Registration schema for form auth
 export const registerSchema = yup.object().shape({
   email: emailValidator.required('Email is required'),
   password: passwordValidator.required('Password is required'),
@@ -73,8 +73,24 @@ export const registerSchema = yup.object().shape({
     .required('Role is required')
 });
 
-// Login schema
+// Login schema for form auth
 export const loginSchema = yup.object().shape({
   email: emailValidator.required('Email is required'),
   password: passwordValidator.required('Password is required')
+});
+
+// Web3 Wallet Login schema
+export const web3LoginSchema = yup.object().shape({
+  address: yup.string().required('Wallet address is required'),
+  signature: yup.string().required('Signature is required'),
+  message: yup.string().required('Message is required'),
+});
+
+// Web3 Wallet Registration schema
+export const web3RegisterSchema = yup.object().shape({
+  name: nameValidator.required('Name is required'),
+  role: yup.string().oneOf(Object.values(UserRole), 'Invalid role').required('Role is required'),
+  address: yup.string().required('Wallet address is required'),
+  signature: yup.string().required('Signature is required'),
+  message: yup.string().required('Message is required'),
 }); 

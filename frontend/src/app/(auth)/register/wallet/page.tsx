@@ -43,6 +43,8 @@ export default function WalletRegisterPage() {
     if (!address || !signature || !message) {
       setError('Missing required wallet information. Please try again.');
       setDebugInfo(`Address: ${!!address}, Signature: ${!!signature}, Message: ${!!message}`);
+    } else if (chainId !== '0x531') {
+      setError('Incorrect network. Please switch to SEI Network.');
     } else {
       console.log('Wallet parameters received:', {
         address: address.substring(0, 6) + '...' + address.substring(address.length - 4),

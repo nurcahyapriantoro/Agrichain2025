@@ -5,8 +5,6 @@ import GoogleProvider from 'next-auth/providers/google';
 import axios from 'axios';
 import { UserRole } from '@/types/user';
 
-// Pastikan API URL benar dan konsisten
-// Default jika tidak ada env variable, gunakan versi production http://localhost:5010/api
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
 
 console.log('NextAuth using API URL:', API_URL);
@@ -72,7 +70,7 @@ export const authOptions: NextAuthOptions = {
               
               // Additional custom properties
               walletAddress: userData.walletAddress || null,
-              role: userData.role || UserRole.CONSUMER,
+              role: userData.role || UserRole.FARMER,
               phone: userData.phone || null,
               address: userData.address || null,
               profilePicture: userData.profilePicture || null,

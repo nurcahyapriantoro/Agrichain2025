@@ -143,11 +143,16 @@ export default function RegisterPage() {
       
       // Get the chain ID
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      if (chainId !== '0x531') {
+        setError('Please switch to the SEI network (Chain ID: 1329)');
+        setMetamaskLoading(false);
+        return; 
+      }
       console.log('Connected to chain ID:', chainId);
       
       // Sign a message to verify ownership
       const timestamp = Date.now();
-      const message = `Register with AgriChain using address: ${address}\nTimestamp: ${timestamp}`;
+      const message = `Register with AgriChain using address: ${address}\nChain ID: ${chainId}\nTimestamp: ${timestamp}`;
       console.log('Requesting signature for message:', message);
       
       try {

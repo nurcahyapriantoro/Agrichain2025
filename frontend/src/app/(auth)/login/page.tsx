@@ -214,7 +214,7 @@ export default function LoginPage() {
       // Send the signature to the backend for verification
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
       
-      const response = await fetch(`${apiUrl}/auth/web3-login`, {
+      const response = await fetch(`${apiUrl}/auth/web3/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

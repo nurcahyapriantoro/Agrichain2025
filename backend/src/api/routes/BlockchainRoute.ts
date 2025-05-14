@@ -9,28 +9,6 @@ import {
 
 const router = express.Router();
 
-/**
- * @swagger
- * /blockchain/status:
- *   get:
- *     summary: Get blockchain status
- *     description: Retrieves current status of the blockchain network
- *     tags: [Blockchain]
- *     responses:
- *       200:
- *         description: Blockchain status information
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/BlockchainStatus'
- *       500:
- *         description: Server error
- */
 router.get("/status", async (req: Request, res: Response) => {
   try {
     // Mock data - in a real implementation this would be obtained from the blockchain service
@@ -57,41 +35,6 @@ router.get("/status", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /blockchain/blocks:
- *   get:
- *     summary: Get blockchain blocks
- *     description: Retrieves a list of blocks in the blockchain
- *     tags: [Blockchain]
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *         description: Page number for pagination
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *         description: Number of blocks per page
- *     responses:
- *       200:
- *         description: List of blockchain blocks
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Block'
- *       500:
- *         description: Server error
- */
 router.get("/blocks", async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -134,37 +77,6 @@ router.get("/blocks", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /blockchain/blocks/{blockId}:
- *   get:
- *     summary: Get block by ID
- *     description: Retrieves details of a specific block by its ID or height
- *     tags: [Blockchain]
- *     parameters:
- *       - in: path
- *         name: blockId
- *         required: true
- *         schema:
- *           type: string
- *         description: Block ID or block height
- *     responses:
- *       200:
- *         description: Block details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/Block'
- *       404:
- *         description: Block not found
- *       500:
- *         description: Server error
- */
 router.get("/blocks/:blockId", async (req: Request, res: Response) => {
   try {
     const { blockId } = req.params;
@@ -195,37 +107,6 @@ router.get("/blocks/:blockId", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /blockchain/transactions/{txId}:
- *   get:
- *     summary: Get transaction by ID
- *     description: Retrieves details of a specific transaction by its ID
- *     tags: [Blockchain]
- *     parameters:
- *       - in: path
- *         name: txId
- *         required: true
- *         schema:
- *           type: string
- *         description: Transaction ID
- *     responses:
- *       200:
- *         description: Transaction details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/Transaction'
- *       404:
- *         description: Transaction not found
- *       500:
- *         description: Server error
- */
 router.get("/transactions/:txId", async (req: Request, res: Response) => {
   try {
     const { txId } = req.params;
@@ -260,39 +141,6 @@ router.get("/transactions/:txId", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /blockchain/product/{productId}/history:
- *   get:
- *     summary: Get product history on blockchain
- *     description: Retrieves the complete history of a product from the blockchain
- *     tags: [Blockchain]
- *     parameters:
- *       - in: path
- *         name: productId
- *         required: true
- *         schema:
- *           type: string
- *         description: Product ID
- *     responses:
- *       200:
- *         description: Product transaction history
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/ProductHistoryEntry'
- *       404:
- *         description: Product not found
- *       500:
- *         description: Server error
- */
 router.get("/product/:productId/history", async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;
@@ -350,130 +198,6 @@ router.get("/product/:productId/history", async (req: Request, res: Response) =>
     });
   }
 });
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     BlockchainStatus:
- *       type: object
- *       properties:
- *         networkName:
- *           type: string
- *           description: Name of the blockchain network
- *         currentHeight:
- *           type: integer
- *           description: Current height/length of the blockchain
- *         totalTransactions:
- *           type: integer
- *           description: Total number of transactions in the blockchain
- *         lastBlockTime:
- *           type: string
- *           format: date-time
- *           description: Timestamp of the last block
- *         averageBlockTime:
- *           type: number
- *           description: Average time between blocks in seconds
- *         nodesOnline:
- *           type: integer
- *           description: Number of nodes currently online
- *         isHealthy:
- *           type: boolean
- *           description: Whether the blockchain is functioning normally
- *           
- *     Block:
- *       type: object
- *       properties:
- *         hash:
- *           type: string
- *           description: Block hash
- *         previousHash:
- *           type: string
- *           description: Hash of the previous block
- *         height:
- *           type: integer
- *           description: Block height/position in the chain
- *         timestamp:
- *           type: string
- *           format: date-time
- *           description: Block creation time
- *         transactions:
- *           type: array
- *           items:
- *             $ref: '#/components/schemas/Transaction'
- *         transactionCount:
- *           type: integer
- *           description: Number of transactions in the block
- *         size:
- *           type: integer
- *           description: Size of the block in bytes
- *         createdBy:
- *           type: string
- *           description: Node that created this block
- *           
- *     Transaction:
- *       type: object
- *       properties:
- *         txId:
- *           type: string
- *           description: Transaction ID
- *         blockHash:
- *           type: string
- *           description: Hash of the block containing this transaction
- *         blockHeight:
- *           type: integer
- *           description: Height of the block containing this transaction
- *         timestamp:
- *           type: string
- *           format: date-time
- *         type:
- *           type: string
- *           enum: [CREATION, TRANSFER, VERIFICATION, RECALL, PAYMENT]
- *           description: Type of transaction
- *         sender:
- *           type: string
- *           description: Transaction sender
- *         receiver:
- *           type: string
- *           description: Transaction receiver (if applicable)
- *         productId:
- *           type: string
- *           description: Reference to the product (if applicable)
- *         data:
- *           type: object
- *           description: Transaction payload/data
- *         status:
- *           type: string
- *           enum: [CONFIRMED, PENDING, FAILED]
- *           description: Transaction status
- *           
- *     ProductHistoryEntry:
- *       type: object
- *       properties:
- *         txId:
- *           type: string
- *           description: Transaction ID
- *         timestamp:
- *           type: string
- *           format: date-time
- *         action:
- *           type: string
- *           enum: [CREATED, VERIFIED, TRANSFERRED, RECALLED, UPDATED]
- *           description: Action performed on the product
- *         performedBy:
- *           type: string
- *           description: ID of the user who performed the action
- *         roleType:
- *           type: string
- *           enum: [FARMER, DISTRIBUTOR, RETAILER, INSPECTOR, ADMIN]
- *           description: Role of the user who performed the action
- *         details:
- *           type: object
- *           description: Action-specific details
- *         blockHeight:
- *           type: integer
- *           description: Block height where this event was recorded
- */
 
 router.get("/last-block", catcher(getLastBlock))
 router.get("/state", catcher(getBlockchainState))

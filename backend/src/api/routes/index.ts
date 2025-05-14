@@ -10,7 +10,9 @@ import ProductSearchRoute from "./ProductSearchRoute"
 import TransactionHistoryRoute from "./TransactionHistoryRoute"
 import NotificationRoute from "./NotificationRoute"
 import StockRoute from "./StockRoute"
-import AuthRoute from "./AuthRoute"
+import FormAuthRoute from "./Auth/FormAuthRoute";
+import GoogleAuthRoute from "./Auth/GoogleAuthRoute";
+import Web3AuthRoute from "./Auth/Web3AuthRoute";
 
 const router = express.Router()
 
@@ -31,6 +33,8 @@ router.use("/product-search", ProductSearchRoute)
 router.use("/transaction-history", TransactionHistoryRoute)
 router.use("/notifications", NotificationRoute)
 router.use("/stock", StockRoute)
-router.use("/auth", AuthRoute)
+router.use("/auth/form", FormAuthRoute);
+router.use("/auth/google", GoogleAuthRoute);
+router.use("/auth/web3", Web3AuthRoute);
 
 export default router

@@ -4,8 +4,6 @@ import express, {
   type Request,
 } from "express"
 import cors from "cors"
-import swaggerUi from 'swagger-ui-express'
-import swaggerJsdoc from "swagger-jsdoc"
 import bodyParser from "body-parser"
 import { ValidationError } from "express-validation"
 import helmet from "helmet"
@@ -15,7 +13,6 @@ import Transaction from "../transaction"
 import apiRoutes from "./routes"
 import catch404Error from "./middleware/catch404"
 import handleError from "./middleware/errorHandler"
-import { swaggerSpec } from "../config"
 import { requestLogger, errorLogger } from "../middleware/requestLogger"
 
 import type { ChainInfo, ConnectedNode } from "../types"
@@ -35,9 +32,11 @@ import ProductSearchRoute from "./routes/ProductSearchRoute"
 import ProductBatchRoute from "./routes/ProductBatchRoute"
 import ProductVersionRoute from "./routes/ProductVersionRoute"
 import WebhookRoute from "./routes/WebhookRoute"
-import AuthRoute from "./routes/AuthRoute"
 import SynchronizationRoute from "./routes/SynchronizationRoute"
 import CustomRoute from "./routes/CustomRoute"
+import FormAuthRoute from "./routes/Auth/FormAuthRoute"
+import GoogleAuthRoute from "./routes/Auth/GoogleAuthRoute"
+import Web3AuthRoute from "./routes/Auth/Web3AuthRoute"
 
 // Import ProductSynchronizationService for auto-sync feature
 import ProductSynchronizationService from "../core/ProductSynchronizationService"
@@ -120,43 +119,6 @@ const api = (
   // setup middleware
   app.use(requestLogger)
 
-  // Setup Swagger documentation
-  const swaggerOptions = {
-    definition: {
-      openapi: "3.0.0",
-      info: {
-        title: "AgriChain API",
-        version: "1.0.0",
-        description: "API documentation for AgriChain blockchain application"
-      },
-      servers: [
-        {
-          url: "http://localhost:5010/api",
-          description: "Development server"
-        }
-      ],
-      components: {
-        securitySchemes: {
-          BearerAuth: {
-            type: "http",
-            scheme: "bearer",
-            bearerFormat: "JWT"
-          }
-        }
-      }
-    },
-    apis: ["./src/api/routes/*.ts"]
-  };
-
-  const swaggerDocs = swaggerJsdoc(swaggerOptions)
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs))
-
-  // API JSON docs endpoint
-  app.get('/api-docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(swaggerSpec);
-  });
-
   // setup routes
   app.use("/api", localsMiddleware, apiRoutes)
 
@@ -218,8 +180,9 @@ const api = (
     });
   });
 
-  // Tambahkan endpoint AuthRoute agar dapat diakses melalui /api/auth
-  app.use("/api/auth", AuthRoute)
+  app.use("/api/auth/form", FormAuthRoute)
+  app.use("/api/auth/google", GoogleAuthRoute)
+  app.use("/api/auth/web3", Web3AuthRoute)
   
   app.use(errorLogger)
   app.use(catch404Error)
