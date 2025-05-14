@@ -31,10 +31,10 @@ export async function POST(req: NextRequest) {
     
     // Forward the request to the backend API
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
-    console.log(`Connecting to backend API: ${apiUrl}/auth/register-wallet`);
+    console.log(`Connecting to backend API: ${apiUrl}/auth/web3/register`);
     
     try {
-      const response = await fetch(`${apiUrl}/auth/register-wallet`, {
+      const response = await fetch(`${apiUrl}/auth/web3/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         { 
           success: false, 
           message: 'Error connecting to server',
-          details: fetchError.message
+          details: fetchError instanceof Error ? fetchError.message : 'Unknown error'
         },
         { status: 503 }
       );
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       { 
         success: false, 
         message: 'An error occurred during wallet registration',
-        details: error.message
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

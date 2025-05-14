@@ -48,7 +48,7 @@ export async function GET(
     }
 
     // Get backend API URL from environment variable
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
     console.log(`Using backend API URL: ${apiUrl}`);
     
     // Get token from session

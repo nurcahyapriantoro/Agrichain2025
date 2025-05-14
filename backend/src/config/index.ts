@@ -10,4 +10,3 @@ export const jwtConfig = {
 export * from "./appConfig"
 export * from "./blockchainConfig"
 export * from "./envConfig"
-export * from "./swaggerConfig"

@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest) {
     const profileData = await req.json();
     
     // Get backend API URL from environment variable
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
     
     // Get token from session
     const token = session.accessToken;

@@ -23,56 +23,6 @@ const ensureFarmerAccess = (req: Request, res: Response, next: Function) => {
   next();
 };
 
-/**
- * @swagger
- * /product/batch/create:
- *   post:
- *     summary: Create multiple products in a batch operation
- *     tags: [Products, Batch Operations]
- *     security:
- *       - BearerAuth: []
- *     description: Create multiple products at once
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - products
- *             properties:
- *               products:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required:
- *                     - name
- *                   properties:
- *                     name:
- *                       type: string
- *                     description:
- *                       type: string
- *                     quantity:
- *                       type: number
- *                     price:
- *                       type: number
- *                     category:
- *                       type: string
- *                     metadata:
- *                       type: object
- *               runAsync:
- *                 type: boolean
- *                 description: If true, the operation will run in the background
- *     responses:
- *       200:
- *         description: Successful batch creation
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - not a farmer
- */
 router.post("/batch/create", 
   authenticateJWT, 
   ensureFarmerAccess,
@@ -142,49 +92,6 @@ router.post("/batch/create",
   }
 );
 
-/**
- * @swagger
- * /product/batch/update:
- *   post:
- *     summary: Update multiple products in a batch operation
- *     tags: [Products, Batch Operations]
- *     security:
- *       - BearerAuth: []
- *     description: Update multiple products at once
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - products
- *             properties:
- *               products:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required:
- *                     - id
- *                     - updates
- *                   properties:
- *                     id:
- *                       type: string
- *                     updates:
- *                       type: object
- *               runAsync:
- *                 type: boolean
- *                 description: If true, the operation will run in the background
- *     responses:
- *       200:
- *         description: Successful batch update
- *       400:
- *         description: Invalid input
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden - not the product owner
- */
 router.post("/batch/update", 
   authenticateJWT,
   validate({

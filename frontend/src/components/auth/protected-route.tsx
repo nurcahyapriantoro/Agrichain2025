@@ -40,6 +40,9 @@ export function ProtectedRoute({
         session: session ? 'exists' : 'none'
       });
 
+      // Log user data for verification
+      console.log('Data pengguna tersimpan:', localStorage.getItem('walletUserData'));
+
       // If using NextAuth session
       if (status === 'authenticated' && session) {
         // Store session in sessionStorage for API client

@@ -26,20 +26,14 @@ export default function AuthLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-br from-[#18122B] to-[#0f1722] min-h-screen`}
-      >
-        <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            <Navigation />
-            <main className="flex-grow">
-              {children}
-            </main>
-          </div>
-          <Toaster />
-        </AuthProvider>
-      </body>
-    </html>
+    <AuthProvider>
+      <div className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-br from-[#18122B] to-[#0f1722] min-h-screen flex flex-col`}>
+        <Navigation />
+        <main className="flex-grow">
+          {children}
+        </main>
+        <Toaster />
+      </div>
+    </AuthProvider>
   );
 } 
