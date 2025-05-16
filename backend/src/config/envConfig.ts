@@ -91,7 +91,7 @@ const getConfig = (): ENV => {
     ENABLE_API: process.env.ENABLE_API === "true",
     ENABLE_MINING: process.env.ENABLE_MINING === "true",
     IS_ORDERER_NODE: process.env.IS_ORDERED_NODE === "true",
-    GENESIS_PRIVATE_KEY: process.env.GENESIS_PRIVATE_KEY as string,
+    GENESIS_PRIVATE_KEY: process.env.GENESIS_PRIVATE_KEY as string || '',
 
     // other settings
     PUBLISH_KEY: process.env.PUBLISH_KEY,

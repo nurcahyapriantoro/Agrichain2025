@@ -92,16 +92,56 @@ export function Navigation() {
   const pathname = usePathname();
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
+  
+  // Tambahkan state untuk autentikasi wallet
+  const [walletAuth, setWalletAuth] = useState<{
+    token: string | null;
+    userData: any;
+    isAuthenticated: boolean;
+  }>({
+    token: null,
+    userData: null,
+    isAuthenticated: false
+  });
 
   useEffect(() => {
     setIsMounted(true);
+    
+    // Periksa autentikasi wallet saat komponen mount
+    if (typeof window !== 'undefined') {
+      const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
+      const walletUserDataString = localStorage.getItem('walletUserData');
+      
+      if (walletToken && walletUserDataString) {
+        try {
+          const userData = JSON.parse(walletUserDataString);
+          setWalletAuth({
+            token: walletToken,
+            userData: userData,
+            isAuthenticated: true
+          });
+          console.log('Navigation: Wallet auth detected', userData);
+        } catch (error) {
+          console.error('Navigation: Error parsing wallet user data:', error);
+        }
+      }
+    }
   }, []);
 
   if (!isMounted) {
     return null;
   }
 
-  const userRole = session?.user?.role as UserRole | undefined;
+  // Gunakan session ATAU walletAuth untuk menentukan status login
+  const isAuthenticated = !!session || walletAuth.isAuthenticated;
+  
+  // Dapatkan userRole dari keduanya
+  const sessionUserRole = session?.user?.role as UserRole | undefined;
+  const walletUserRole = walletAuth.userData?.role as UserRole | undefined;
+  const userRole = sessionUserRole || walletUserRole;
+  
+  // Dapatkan userName dari keduanya
+  const userName = session?.user?.name || walletAuth.userData?.name || 'Profile';
 
   // Check if we're on auth pages (login or register)
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/register/');
@@ -112,7 +152,7 @@ export function Navigation() {
     ? navigationItems.filter(item => item.label === 'Home')
     : navigationItems.filter(
         (item) => (!item.roles || !userRole || item.roles.includes(userRole)) && 
-        (!item.authRequired || (item.authRequired && session))
+        (!item.authRequired || (item.authRequired && isAuthenticated))
       );
 
   const handleSignOut = async () => {
@@ -122,6 +162,14 @@ export function Navigation() {
       localStorage.removeItem('web3AuthToken');
       localStorage.removeItem('walletAddress');
       localStorage.removeItem('walletUserData');
+      sessionStorage.removeItem('session');
+      
+      // Reset wallet auth state
+      setWalletAuth({
+        token: null,
+        userData: null,
+        isAuthenticated: false
+      });
     }
 
     try {
@@ -203,7 +251,7 @@ export function Navigation() {
           </div>
 
           <div className="hidden md:flex items-center space-x-2">
-            {session ? (
+            {isAuthenticated ? (
               <div className="flex items-center space-x-2">
                 <Link
                   href="/profile"
@@ -215,7 +263,7 @@ export function Navigation() {
                       <div className="absolute inset-0 bg-[#a259ff] rounded-full blur-sm opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
                       <User className="w-5 h-5" />
                     </div>
-                    <span className="ml-2">{session.user?.name || 'Profile'}</span>
+                    <span className="ml-2">{userName}</span>
                   </div>
                 </Link>
                 <button
@@ -303,7 +351,7 @@ export function Navigation() {
             </Link>
           ))}
 
-          {session ? (
+          {isAuthenticated ? (
             <>
               <Link
                 href="/profile"
@@ -313,7 +361,7 @@ export function Navigation() {
                 <div className="text-[#a259ff] group-hover:text-white transition-colors duration-300">
                   <User className="w-5 h-5" />
                 </div>
-                <span className="ml-3 text-[#a259ff] group-hover:text-white transition-colors duration-300">Profile</span>
+                <span className="ml-3 text-[#a259ff] group-hover:text-white transition-colors duration-300">{userName}</span>
               </Link>
               <button
                 onClick={() => {

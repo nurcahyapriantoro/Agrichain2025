@@ -1,10 +1,12 @@
 import { UserRole, TransactionActionType, ProductStatus, RecallReason, StockChangeReason } from "../enum";
 import { txhashDB } from "../helper/level.db.client";
+import { BlockchainData, TransactionHistory as TransactionHistoryType } from "../types";
+import crypto from "crypto";
 
 /**
  * Interface for a transaction history record
  */
-interface TransactionRecord {
+export interface TransactionRecord {
   id: string;
   productId: string;
   fromUserId: string; 
@@ -17,12 +19,20 @@ interface TransactionRecord {
   details?: Record<string, any>;
   blockHash?: string; // Hash of the block containing this transaction
   transactionHash?: string; // Hash of the transaction
+  blockchain?: BlockchainData; // Blockchain details including block height, hash, etc.
+}
+
+/**
+ * Generate a unique transaction ID
+ */
+function generateTransactionId(): string {
+  return `txn-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
 /**
  * Class for recording and tracking product transaction history
  */
-class TransactionHistory {
+export class TransactionHistory {
   private productId: string;
   private fromUserId: string;
   private toUserId: string;
@@ -161,7 +171,7 @@ class TransactionHistory {
 /**
  * Service for managing transaction history
  */
-class TransactionHistoryService {
+export class TransactionHistoryService {
   /**
    * Create a new transaction history record for product creation
    * @param productId ID of the created product
@@ -173,7 +183,7 @@ class TransactionHistoryService {
     productId: string,
     farmerId: string,
     details?: Record<string, any>
-  ): Promise<{ success: boolean; transactionId?: string; message?: string }> {
+  ): Promise<{ success: boolean; transactionId?: string; message?: string; blockchainData?: BlockchainData }> {
     const history = new TransactionHistory(
       productId,
       farmerId, // from is the farmer
@@ -183,7 +193,48 @@ class TransactionHistoryService {
       details
     );
 
-    return history.recordTransaction(UserRole.FARMER, UserRole.FARMER);
+    const result = await history.recordTransaction(UserRole.FARMER, UserRole.FARMER);
+    
+    // Add blockchain details
+    if (result.success && result.transactionId) {
+      // Generate blockchain data
+      const blockHeight = await TransactionHistoryService.getCurrentBlockHeight() + 1;
+      const blockHash = TransactionHistoryService.generateBlockHash(blockHeight, { 
+        id: result.transactionId,
+        productId,
+        fromUserId: farmerId,
+        toUserId: farmerId,
+        timestamp: Date.now() 
+      });
+      const transactionHash = TransactionHistoryService.generateTransactionHash({ 
+        id: result.transactionId,
+        productId,
+        fromUserId: farmerId,
+        toUserId: farmerId,
+        timestamp: Date.now() 
+      });
+      
+      // Update the transaction with blockchain details
+      await TransactionHistory.setBlockchainDetails(
+        result.transactionId,
+        blockHash,
+        transactionHash
+      );
+      
+      // Return blockchain details with the result
+      return {
+        ...result,
+        blockchainData: {
+          blockHeight,
+          blockHash,
+          transactionHash,
+          timestamp: Date.now(),
+          validator: 'agrichain-node-1'
+        }
+      };
+    }
+    
+    return result;
   }
 
   /**
@@ -203,7 +254,7 @@ class TransactionHistoryService {
     toUserId: string,
     toRole: UserRole,
     details?: Record<string, any>
-  ): Promise<{ success: boolean; transactionId?: string; message?: string }> {
+  ): Promise<{ success: boolean; transactionId?: string; message?: string; blockchainData?: BlockchainData }> {
     const history = new TransactionHistory(
       productId,
       fromUserId,
@@ -213,7 +264,48 @@ class TransactionHistoryService {
       details
     );
 
-    return history.recordTransaction(fromRole, toRole);
+    const result = await history.recordTransaction(fromRole, toRole);
+    
+    // Add blockchain details
+    if (result.success && result.transactionId) {
+      // Generate blockchain data
+      const blockHeight = await TransactionHistoryService.getCurrentBlockHeight() + 1;
+      const blockHash = TransactionHistoryService.generateBlockHash(blockHeight, { 
+        id: result.transactionId,
+        productId,
+        fromUserId,
+        toUserId,
+        timestamp: Date.now() 
+      });
+      const transactionHash = TransactionHistoryService.generateTransactionHash({ 
+        id: result.transactionId,
+        productId,
+        fromUserId,
+        toUserId,
+        timestamp: Date.now() 
+      });
+      
+      // Update the transaction with blockchain details
+      await TransactionHistory.setBlockchainDetails(
+        result.transactionId,
+        blockHash,
+        transactionHash
+      );
+      
+      // Return blockchain details with the result
+      return {
+        ...result,
+        blockchainData: {
+          blockHeight,
+          blockHash,
+          transactionHash,
+          timestamp: Date.now(),
+          validator: 'agrichain-node-1'
+        }
+      };
+    }
+    
+    return result;
   }
 
   /**
@@ -607,130 +699,96 @@ class TransactionHistoryService {
   }
 
   /**
-   * Get all recalled products
-   * @returns Array of transaction records for recalled products
+   * Get current blockchain height
+   * @returns Current block height
    */
-  static async getRecalledProducts(): Promise<TransactionRecord[]> {
+  static async getCurrentBlockHeight(): Promise<number> {
     try {
-      // Dapatkan semua kunci dari database blockchain
-      const allKeys = await txhashDB.keys().all();
+      const latestBlockData = await txhashDB.get('blockchain:latest').catch(() => null);
       
-      // Filter kunci yang terkait dengan transaksi
-      const transactionKeys = allKeys.filter(key => key.startsWith('transaction:'));
-      
-      // Ambil semua data transaksi
-      const transactions: TransactionRecord[] = [];
-      
-      for (const key of transactionKeys) {
+      if (latestBlockData) {
         try {
-          const data = await txhashDB.get(key);
-          const record = JSON.parse(data);
-          
-          // Pastikan data memiliki struktur yang benar
-          if (record && 
-              record.actionType === TransactionActionType.RECALL && 
-              record.productStatus === ProductStatus.RECALLED) {
-            transactions.push(record);
-          }
-        } catch (err) {
-          console.error(`Error parsing transaction from key ${key}:`, err);
-          // Lanjutkan ke transaksi berikutnya jika ada error dengan satu transaksi
+          const blockData = JSON.parse(latestBlockData);
+          return blockData.height || 0;
+        } catch {
+          return 0;
         }
       }
       
-      // Urutkan berdasarkan timestamp terbaru
-      return transactions.sort((a, b) => b.timestamp - a.timestamp);
+      return 0;
     } catch (error) {
-      console.error("Error fetching recalled products:", error);
-      return [];
+      console.error('Error getting blockchain height:', error);
+      return 0;
     }
   }
-
+  
   /**
-   * Get the latest status of a product
-   * @param productId ID of the product
-   * @returns The latest status record or null if not found
+   * Generate a block hash based on block height and transaction data
+   * @param blockHeight Block height
+   * @param transaction Transaction data
+   * @returns Block hash
    */
-  static async getLatestProductStatus(
-    productId: string
-  ): Promise<TransactionRecord | null> {
-    try {
-      // Get all transaction history for the product
-      const history = await this.getProductTransactionHistory(productId);
-      
-      // Sort by timestamp in descending order to get the most recent first
-      history.sort((a, b) => b.timestamp - a.timestamp);
-      
-      // Return the latest status or null if no history
-      return history.length > 0 ? history[0] : null;
-    } catch (error) {
-      console.error("Error fetching latest product status:", error);
-      return null;
-    }
+  static generateBlockHash(blockHeight: number, transaction: any): string {
+    const timestamp = Date.now();
+    const data = JSON.stringify({
+      height: blockHeight,
+      timestamp,
+      transactions: [transaction.id],
+      previousHash: blockHeight > 1 ? `block-${blockHeight-1}` : '0000000000000000000000000000000000000000000000000000000000000000'
+    });
+    
+    // In a real blockchain, this would be a cryptographic hash
+    // For this example, we'll use a simplified hash method
+    const hash = crypto.createHash('sha256').update(data).digest('hex');
+    return hash;
   }
-
+  
   /**
-   * Get a specific transaction by ID
-   * @param transactionId ID of the transaction
-   * @returns Transaction record or null if not found
+   * Generate a transaction hash based on transaction data
+   * @param transaction Transaction data
+   * @returns Transaction hash
    */
-  static async getTransaction(
-    transactionId: string
-  ): Promise<TransactionRecord | null> {
-    try {
-      // Validate transaction ID parameter
-      if (!transactionId) {
-        console.error("Invalid transactionId parameter");
-        return null;
-      }
-
-      try {
-        // Try to get the transaction directly using its ID
-        const transactionData = await txhashDB.get(`transaction:${transactionId}`);
-        
-        if (transactionData) {
-          const record = JSON.parse(transactionData);
-          return record as TransactionRecord;
-        }
-      } catch (err) {
-        // If direct lookup fails, try searching through all transactions
-        console.log(`Transaction not found directly with ID: ${transactionId}, performing search...`);
-      }
-
-      // If direct lookup fails, search through all transaction keys
-      const allKeys = await txhashDB.keys().all();
-      
-      // Filter keys related to transactions
-      const transactionKeys = allKeys.filter(key => 
-        key.startsWith('transaction:')
-      );
-      
-      for (const key of transactionKeys) {
-        try {
-          const data = await txhashDB.get(key);
-          if (!data) continue;
-          
-          const record = JSON.parse(data);
-          
-          // Check if this is the transaction we're looking for
-          if (record && record.id === transactionId) {
-            return record as TransactionRecord;
-          }
-        } catch (err) {
-          // Skip this record if there's an error
-          continue;
-        }
-      }
-      
-      // If we get here, the transaction was not found
-      console.log(`Transaction with ID ${transactionId} not found`);
-      return null;
-    } catch (error) {
-      console.error("Error fetching transaction:", error);
-      return null;
-    }
+  static generateTransactionHash(transaction: any): string {
+    const data = JSON.stringify({
+      id: transaction.id,
+      timestamp: transaction.timestamp,
+      productId: transaction.productId,
+      fromUserId: transaction.fromUserId,
+      toUserId: transaction.toUserId,
+      actionType: transaction.actionType,
+      details: transaction.details
+    });
+    
+    // In a real blockchain, this would be a cryptographic hash
+    // For this example, we'll use a simplified hash method
+    const hash = crypto.createHash('sha256').update(data).digest('hex');
+    return hash;
   }
-
+  
+  /**
+   * Update the latest block record
+   * @param blockHeight Block height
+   * @param blockHash Block hash
+   * @param transactionId Transaction ID included in the block
+   */
+  static async updateLatestBlock(blockHeight: number, blockHash: string, transactionId: string): Promise<void> {
+    const blockData = {
+      height: blockHeight,
+      hash: blockHash,
+      timestamp: Date.now(),
+      transactions: [transactionId]
+    };
+    
+    // Save the latest block data
+    await txhashDB.put('blockchain:latest', JSON.stringify(blockData));
+    
+    // Save the block by height
+    await txhashDB.put(`blockchain:block:${blockHeight}`, JSON.stringify(blockData));
+    
+    // Save the block by hash
+    await txhashDB.put(`blockchain:hash:${blockHash}`, JSON.stringify(blockData));
+  }
+  
   /**
    * Get all transaction keys from the database
    * @returns Array of transaction keys
@@ -794,6 +852,66 @@ class TransactionHistoryService {
       return [];
     }
   }
-}
+  
+  /**
+   * Get a specific transaction by ID
+   * @param transactionId ID of the transaction
+   * @returns Transaction record or null if not found
+   */
+  static async getTransaction(
+    transactionId: string
+  ): Promise<TransactionRecord | null> {
+    try {
+      // Validate transaction ID parameter
+      if (!transactionId) {
+        console.error("Invalid transactionId parameter");
+        return null;
+      }
 
-export { TransactionHistory, TransactionHistoryService, TransactionRecord };
+      try {
+        // Try to get the transaction directly using its ID
+        const transactionData = await txhashDB.get(`transaction:${transactionId}`);
+        
+        if (transactionData) {
+          const record = JSON.parse(transactionData);
+          return record as TransactionRecord;
+        }
+      } catch (err) {
+        // If direct lookup fails, try searching through all transactions
+        console.log(`Transaction not found directly with ID: ${transactionId}, performing search...`);
+      }
+
+      // If direct lookup fails, search through all transaction keys
+      const allKeys = await txhashDB.keys().all();
+      
+      // Filter keys related to transactions
+      const transactionKeys = allKeys.filter(key => 
+        key.startsWith('transaction:')
+      );
+      
+      for (const key of transactionKeys) {
+        try {
+          const data = await txhashDB.get(key);
+          if (!data) continue;
+          
+          const record = JSON.parse(data);
+          
+          // Check if this is the transaction we're looking for
+          if (record && record.id === transactionId) {
+            return record as TransactionRecord;
+          }
+        } catch (err) {
+          // Skip this record if there's an error
+          continue;
+        }
+      }
+      
+      // If we get here, the transaction was not found
+      console.log(`Transaction with ID ${transactionId} not found`);
+      return null;
+    } catch (error) {
+      console.error("Error fetching transaction:", error);
+      return null;
+    }
+  }
+}

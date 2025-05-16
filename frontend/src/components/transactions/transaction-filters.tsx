@@ -1,24 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AdjustmentsHorizontalIcon, XMarkIcon, CalendarIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { format } from 'date-fns';
 
 export interface TransactionFilters {
-  productId?: string;
-  type?: string;
-  status?: string;
-  fromUser?: string;
-  toUser?: string;
-  fromDate?: Date;
-  toDate?: Date;
   search?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  type?: string;
+  productId?: string;
+  userId?: string;
 }
 
 interface TransactionFiltersProps {
@@ -27,12 +26,12 @@ interface TransactionFiltersProps {
   onReset: () => void;
 }
 
-export default function TransactionFilters({ 
-  filters, 
-  onFilterChange, 
-  onReset 
-}: TransactionFiltersProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export const TransactionFilters: React.FC<TransactionFiltersProps> = ({
+  filters,
+  onFilterChange,
+  onReset
+}) => {
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [search, setSearch] = useState(filters.search || '');
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,17 +43,26 @@ export default function TransactionFilters({
     onFilterChange({ ...filters, search });
   };
 
-  const handleSelectChange = (field: keyof TransactionFilters, value: string) => {
+  const handleDateSelect = (date: Date | undefined, field: 'startDate' | 'endDate') => {
+    if (date) {
+      onFilterChange({
+        ...filters,
+        [field]: date.toISOString().split('T')[0]
+      });
+    }
+  };
+
+  const handleStatusChange = (value: string) => {
     onFilterChange({
       ...filters,
-      [field]: value === 'all' ? undefined : value
+      status: value
     });
   };
 
-  const handleDateChange = (field: 'fromDate' | 'toDate', date: Date | undefined) => {
+  const handleTypeChange = (value: string) => {
     onFilterChange({
       ...filters,
-      [field]: date
+      type: value
     });
   };
 
@@ -63,166 +71,108 @@ export default function TransactionFilters({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md mb-6">
-      {/* Search Bar */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-            </div>
-            <Input
-              type="search"
-              value={search}
-              onChange={handleSearchChange}
-              placeholder="Search transactions by product name, users, or ID..."
-              className="pl-10"
-            />
-          </div>
-          <Button type="submit">Search</Button>
-          <Button 
-            type="button" 
-            variant={isOpen ? "primary" : "outline"} 
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-1"
-          >
-            <AdjustmentsHorizontalIcon className="h-5 w-5" />
-            Filters {hasActiveFilters() && <span className="inline-flex items-center justify-center w-4 h-4 ml-1 text-xs font-semibold text-white bg-green-500 rounded-full">+</span>}
-          </Button>
-          {hasActiveFilters() && (
-            <Button type="button" variant="outline" onClick={onReset} className="flex items-center gap-1">
-              <XMarkIcon className="h-5 w-5" />
-              Reset
-            </Button>
-          )}
-        </form>
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium text-white">Filters</h3>
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={onReset}
+          className="text-gray-400 hover:text-white"
+        >
+          Reset all
+        </Button>
       </div>
-
-      {/* Expanded Filters */}
-      {isOpen && (
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-800">
-          {/* Transaction Type Filter */}
-          <div>
-            <Label htmlFor="type">Transaction Type</Label>
-            <Select
-              id="type"
-              value={filters.type || 'all'}
-              onValueChange={(value) => handleSelectChange('type', value)}
-              className="w-full mt-1"
-            >
-              <option value="all">All Types</option>
-              <option value="transfer">Transfer</option>
-              <option value="purchase">Purchase</option>
-              <option value="sale">Sale</option>
-              <option value="verification">Verification</option>
-            </Select>
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <Label htmlFor="status">Status</Label>
-            <Select
-              id="status"
-              value={filters.status || 'all'}
-              onValueChange={(value) => handleSelectChange('status', value)}
-              className="w-full mt-1"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-              <option value="transferred">Transferred</option>
-              <option value="verified">Verified</option>
-              <option value="failed">Failed</option>
-            </Select>
-          </div>
-
-          {/* From Date Picker */}
-          <div>
-            <Label htmlFor="fromDate">From Date</Label>
+      
+      <div className="space-y-4">
+        {/* Transaction Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+          <Select
+            value={filters.status || ''}
+            onValueChange={handleStatusChange}
+          >
+            <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+              <SelectValue placeholder="Any Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Any Status</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="TRANSFERRED">Transferred</SelectItem>
+              <SelectItem value="VERIFIED">Verified</SelectItem>
+              <SelectItem value="FAILED">Failed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Transaction Type */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Type</label>
+          <Select
+            value={filters.type || ''}
+            onValueChange={handleTypeChange}
+          >
+            <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+              <SelectValue placeholder="Any Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Any Type</SelectItem>
+              <SelectItem value="CREATE">Creation</SelectItem>
+              <SelectItem value="TRANSFER">Transfer</SelectItem>
+              <SelectItem value="VERIFY">Verification</SelectItem>
+              <SelectItem value="UPDATE">Update</SelectItem>
+              <SelectItem value="RECALL">Recall</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        {/* Date Range */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Date Range</label>
+          <div className="flex space-x-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  id="fromDate"
-                  variant="outline"
-                  className="w-full mt-1 justify-start text-left font-normal"
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start text-left font-normal bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.fromDate ? format(filters.fromDate, 'PPP') : <span>Pick a date</span>}
+                  {filters.startDate ? new Date(filters.startDate).toLocaleDateString() : 'Start Date'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={filters.fromDate}
-                  onSelect={(date) => handleDateChange('fromDate', date)}
+                  selected={filters.startDate ? new Date(filters.startDate) : undefined}
+                  onSelect={(date) => handleDateSelect(date, 'startDate')}
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* To Date Picker */}
-          <div>
-            <Label htmlFor="toDate">To Date</Label>
+            
             <Popover>
               <PopoverTrigger asChild>
-                <Button
-                  id="toDate"
-                  variant="outline"
-                  className="w-full mt-1 justify-start text-left font-normal"
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start text-left font-normal bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {filters.toDate ? format(filters.toDate, 'PPP') : <span>Pick a date</span>}
+                  {filters.endDate ? new Date(filters.endDate).toLocaleDateString() : 'End Date'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
+              <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={filters.toDate}
-                  onSelect={(date) => handleDateChange('toDate', date)}
+                  selected={filters.endDate ? new Date(filters.endDate) : undefined}
+                  onSelect={(date) => handleDateSelect(date, 'endDate')}
                   initialFocus
                 />
               </PopoverContent>
             </Popover>
-          </div>
-
-          {/* Product ID Filter */}
-          <div>
-            <Label htmlFor="productId">Product ID</Label>
-            <Input
-              id="productId"
-              value={filters.productId || ''}
-              onChange={(e) => onFilterChange({ ...filters, productId: e.target.value || undefined })}
-              placeholder="Filter by product ID"
-              className="mt-1"
-            />
-          </div>
-
-          {/* From User Filter */}
-          <div>
-            <Label htmlFor="fromUser">From User</Label>
-            <Input
-              id="fromUser"
-              value={filters.fromUser || ''}
-              onChange={(e) => onFilterChange({ ...filters, fromUser: e.target.value || undefined })}
-              placeholder="Sender/From user"
-              className="mt-1"
-            />
-          </div>
-
-          {/* To User Filter */}
-          <div>
-            <Label htmlFor="toUser">To User</Label>
-            <Input
-              id="toUser"
-              value={filters.toUser || ''}
-              onChange={(e) => onFilterChange({ ...filters, toUser: e.target.value || undefined })}
-              placeholder="Recipient/To user"
-              className="mt-1"
-            />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
-} 
+};
+
+export default TransactionFilters; 

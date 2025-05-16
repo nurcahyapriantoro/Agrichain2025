@@ -1,5 +1,4 @@
 import { Router, Request, Response } from "express";
-import { getUserStatistics } from "../controller/UserController";
 import { txhashDB } from "../../helper/level.db.client";
 
 // Buat router baru

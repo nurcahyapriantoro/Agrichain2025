@@ -1,14 +1,17 @@
 'use client';
 
+import React from 'react';
 import { Transaction } from '@/lib/types';
 import { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Card } from '@/components/ui/card';
 
-interface TransactionChartsProps {
+export interface TransactionChartsProps {
   transactions: Transaction[];
+  stats?: any; // Add stats property
 }
 
-export default function TransactionCharts({ transactions }: TransactionChartsProps) {
+const TransactionCharts: React.FC<TransactionChartsProps> = ({ transactions, stats }) => {
   const [typeData, setTypeData] = useState<any[]>([]);
   const [statusData, setStatusData] = useState<any[]>([]);
   const [timeData, setTimeData] = useState<any[]>([]);
@@ -78,112 +81,74 @@ export default function TransactionCharts({ transactions }: TransactionChartsPro
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
   
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-4 mb-6">
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">Transaction Analytics</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Card className="p-4 bg-gray-800 border-gray-700">
+        <h3 className="text-xl font-semibold text-white mb-4">Transaction Distribution</h3>
+        <div className="h-64 bg-gray-700 rounded-md flex items-center justify-center">
+          {stats ? (
+            <p className="text-gray-300">Stats data available: {Object.keys(stats).length} metrics</p>
+          ) : (
+            <p className="text-gray-300">Chart placeholder (transactions: {transactions.length})</p>
+          )}
+        </div>
+      </Card>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Transaction Activity Over Time */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Transaction Activity</h3>
-          <div className="h-72">
-            {timeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={timeData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 60,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="date" 
-                    angle={-45} 
-                    textAnchor="end"
-                    height={60}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="count" name="Transactions" fill="#10B981" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 dark:text-gray-400">No data available</p>
-              </div>
-            )}
+      <Card className="p-4 bg-gray-800 border-gray-700">
+        <h3 className="text-xl font-semibold text-white mb-4">Transaction Timeline</h3>
+        <div className="h-64 bg-gray-700 rounded-md flex items-center justify-center">
+          <p className="text-gray-300">Chart placeholder</p>
+        </div>
+      </Card>
+      
+      <Card className="p-4 bg-gray-800 border-gray-700 md:col-span-2">
+        <h3 className="text-xl font-semibold text-white mb-4">Transaction Statistics</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-700 p-4 rounded-md">
+            <h4 className="text-gray-400">Total Transactions</h4>
+            <p className="text-2xl font-bold text-white">{transactions.length}</p>
+          </div>
+          
+          <div className="bg-gray-700 p-4 rounded-md">
+            <h4 className="text-gray-400">Transaction Types</h4>
+            <p className="text-2xl font-bold text-white">
+              {Array.from(new Set(transactions.map(t => t.actionType || t.type))).length || 0}
+            </p>
+          </div>
+          
+          <div className="bg-gray-700 p-4 rounded-md">
+            <h4 className="text-gray-400">Products Involved</h4>
+            <p className="text-2xl font-bold text-white">
+              {Array.from(new Set(transactions.map(t => t.productId))).length || 0}
+            </p>
           </div>
         </div>
-
-        {/* Transaction Types Distribution */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Transaction Types</h3>
-          <div className="h-72">
-            {typeData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={typeData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {typeData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 dark:text-gray-400">No data available</p>
-              </div>
-            )}
+        
+        {stats && (
+          <div className="mt-6 bg-gray-700 p-4 rounded-md">
+            <h4 className="text-lg font-medium text-white mb-2">Database Statistics</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {stats.stats && (
+                <>
+                  <div className="bg-gray-800 p-3 rounded-md">
+                    <p className="text-gray-400 text-sm">Total Keys</p>
+                    <p className="text-xl font-bold text-white">{stats.stats.totalKeys || 0}</p>
+                  </div>
+                  <div className="bg-gray-800 p-3 rounded-md">
+                    <p className="text-gray-400 text-sm">Transaction Keys</p>
+                    <p className="text-xl font-bold text-white">{stats.stats.transactionKeys || 0}</p>
+                  </div>
+                  <div className="bg-gray-800 p-3 rounded-md">
+                    <p className="text-gray-400 text-sm">Product Keys</p>
+                    <p className="text-xl font-bold text-white">{stats.stats.productKeys || 0}</p>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* Transaction Status Distribution */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg lg:col-span-2">
-          <h3 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Transaction Status Distribution</h3>
-          <div className="h-72">
-            {statusData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 dark:text-gray-400">No data available</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        )}
+      </Card>
     </div>
   );
-} 
+};
+
+export default TransactionCharts; 

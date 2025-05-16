@@ -59,6 +59,29 @@ interface Peer {
   publicKey: string
 }
 
+export interface BlockchainData {
+  blockHeight: number;
+  blockHash: string;
+  transactionHash: string;
+  timestamp: number;
+  validator: string;
+}
+
+export interface TransactionHistory {
+  id: string;
+  transactionId?: string;
+  productId?: string;
+  fromUserId?: string;
+  fromRole?: string;
+  toUserId?: string;
+  toRole?: string;
+  timestamp: number;
+  actionType: string;
+  productStatus?: string;
+  details?: Record<string, any>;
+  blockchain?: BlockchainData;
+}
+
 export type {
   BlockInterface,
   BlockchainInterface,

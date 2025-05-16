@@ -15,7 +15,23 @@ import {
 export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
-  const isAuthenticated = !!session?.user;
+  const [walletAuthenticated, setWalletAuthenticated] = useState(false);
+  
+  // Periksa autentikasi wallet saat komponen mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
+      const walletUserData = localStorage.getItem('walletUserData');
+      
+      if (walletToken && walletUserData) {
+        setWalletAuthenticated(true);
+        console.log('Home: Wallet auth detected');
+      }
+    }
+  }, []);
+  
+  // User dianggap terotentikasi jika ada session NextAuth ATAU ada autentikasi wallet
+  const isAuthenticated = !!session?.user || walletAuthenticated;
   
   // Data state for statistics
   const [userStatistics, setUserStatistics] = useState<{
@@ -116,32 +132,34 @@ export default function Home() {
         </div>
       </section>
       
-      {/* Footer Highlight */}
-      <section className="py-16 bg-black/30 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Ready to Join the Agricultural Revolution?
-          </h2>
-          <p className="text-gray-300 text-lg mb-8 max-w-3xl mx-auto">
-            Start tracking your products on the blockchain today. Join farmers, collectors, 
-            traders, retailers, and consumers on our transparent supply chain platform.
-          </p>
-          <div className="flex justify-center gap-4">
-            <a 
-              href="/auth/register" 
-              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-md font-medium"
-            >
-              Create Account
-            </a>
-            <a 
-              href="/select-role" 
-              className="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-md font-medium border border-gray-700"
-            >
-              Explore Roles
-            </a>
+      {/* Footer Highlight - Hide for authenticated users */}
+      {!isAuthenticated && (
+        <section className="py-16 bg-black/30 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto px-4 text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+              Ready to Join the Agricultural Revolution?
+            </h2>
+            <p className="text-gray-300 text-lg mb-8 max-w-3xl mx-auto">
+              Start tracking your products on the blockchain today. Join farmers, collectors, 
+              traders, retailers, and consumers on our transparent supply chain platform.
+            </p>
+            <div className="flex justify-center gap-4">
+              <a 
+                href="/register" 
+                className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-md font-medium"
+              >
+                Create Account
+              </a>
+              <a 
+                href="/roles" 
+                className="px-8 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-md font-medium border border-gray-700"
+              >
+                Explore Roles
+              </a>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
   );
 }

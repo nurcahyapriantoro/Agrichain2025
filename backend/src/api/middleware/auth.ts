@@ -1,7 +1,3 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { jwtConfig } from '../../config';
-
 // Use the auth middleware from the main auth file 
 import { isAuthenticated as mainIsAuthenticated } from '../../middleware/auth';
 

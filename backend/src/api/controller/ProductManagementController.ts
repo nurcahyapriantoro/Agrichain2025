@@ -51,31 +51,12 @@ export default class ProductManagementController {
       case TransactionActionType.RECEIVE:
         return ProductStatus.RECEIVED;
       
-      case TransactionActionType.PACKAGE:
-        return ProductStatus.PACKAGED;
-      
-      case TransactionActionType.SHIP:
-        return ProductStatus.SHIPPED;
-      
       case TransactionActionType.SELL:
         return ProductStatus.SOLD;
       
       case TransactionActionType.VERIFY:
         return ProductStatus.VERIFIED;
-      
-      case TransactionActionType.INSPECT:
-        // Tergantung hasil inspeksi (dalam kasus ini kita asumsikan lulus)
-        return ProductStatus.VERIFIED;
-      
-      case TransactionActionType.STOCK_IN:
-        return ProductStatus.IN_STOCK;
-      
-      case TransactionActionType.STOCK_OUT:
-        return ProductStatus.OUT_OF_STOCK;
-      
-      case TransactionActionType.RECALL:
-        return ProductStatus.RECALLED;
-      
+  
       default:
         // Jika tidak ada pemetaan khusus, pertahankan status saat ini
         return currentStatus;
@@ -169,10 +150,6 @@ export default class ProductManagementController {
           message: `User with role ${userRole} is not authorized to set product status to ${newStatus}`
         });
       }
-
-      // Lakukan aksi transaksi sesuai dengan jenis aksi
-      // Dalam implementasi sebenarnya, ini akan memanggil kontrak dan logika bisnis yang sesuai
-      
       // Sebagai contoh, untuk proses transfer:
       if (action === TransactionActionType.TRANSFER && targetUserId) {
         // Lakukan logika transfer produk ke pengguna lain
@@ -231,29 +208,15 @@ export default class ProductManagementController {
       ],
       [UserRole.COLLECTOR]: [
         ProductStatus.RECEIVED,
-        ProductStatus.PACKAGED,
         ProductStatus.TRANSFERRED,
-        ProductStatus.SHIPPED,
-        ProductStatus.IN_STOCK,
-        ProductStatus.OUT_OF_STOCK,
-        ProductStatus.LOW_STOCK
       ],
       [UserRole.TRADER]: [
         ProductStatus.RECEIVED,
-        ProductStatus.PACKAGED,
         ProductStatus.TRANSFERRED,
-        ProductStatus.SHIPPED,
-        ProductStatus.IN_STOCK,
-        ProductStatus.OUT_OF_STOCK,
-        ProductStatus.LOW_STOCK,
-        ProductStatus.SOLD
       ],
       [UserRole.RETAILER]: [
         ProductStatus.RECEIVED,
         ProductStatus.SOLD,
-        ProductStatus.IN_STOCK,
-        ProductStatus.OUT_OF_STOCK,
-        ProductStatus.LOW_STOCK
       ],
       [UserRole.CONSUMER]: [
         // Konsumen biasanya tidak memperbarui status produk

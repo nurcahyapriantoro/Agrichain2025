@@ -13,7 +13,7 @@ const contractId = 'product-management-v1';
 const createProduct = async (req: Request, res: Response) => {
   try {
     const { 
-      farmerId, 
+      ownerId, 
       name, 
       description, 
       initialQuantity, 
@@ -28,18 +28,18 @@ const createProduct = async (req: Request, res: Response) => {
       ...otherFields 
     } = req.body;
 
-    // Validate that farmerId matches authenticated user ID
-    if (farmerId !== req.user?.id) {
+    // Validate that ownerId matches authenticated user ID
+    if (ownerId !== req.user?.id) {
       return res.status(403).json({
         success: false,
-        message: "FarmerId must match authenticated user ID"
+        message: "ownerId must match authenticated user ID"
       });
     }
 
-    if (!farmerId || !name) {
+    if (!ownerId || !name) {
       return res.status(400).json({
         success: false,
-        message: "Missing required parameters: farmerId, name, and productName are required"
+        message: "Missing required parameters: ownerId and name are required"
       });
     }
 
@@ -77,7 +77,7 @@ const createProduct = async (req: Request, res: Response) => {
     };
 
     console.log("Creating product with data:", {
-      farmerId,
+      ownerId,
       name,
       description,
       quantity: productQuantity,
@@ -87,7 +87,7 @@ const createProduct = async (req: Request, res: Response) => {
 
     // Simpan produk di database dan daftarkan ke blockchain
     const result = await ProductService.createProduct(
-      farmerId, 
+      ownerId, 
       {
         name,
         description,
@@ -97,7 +97,7 @@ const createProduct = async (req: Request, res: Response) => {
         status: ProductStatus.CREATED
       },
       {
-        productName:
+        productName: name,
         unit,
         location,
         productionDate,
@@ -114,13 +114,25 @@ const createProduct = async (req: Request, res: Response) => {
       });
     }
 
+    // Get blockchain explorer data if available
+    const blockchainData = result.blockchainData || (
+      result.blockchainRegistered ? {
+        blockHeight: 0,
+        blockHash: result.blockchainTransactionId || "",
+        transactionHash: result.blockchainTransactionId || "",
+        timestamp: Date.now(),
+        validator: "agrichain-node-1"
+      } : undefined
+    );
+
     return res.status(201).json({
       success: true,
       data: {
         productId: result.productId,
         transactionId: result.transactionId,
-        blockchainRegistered: result.blockchainRegistered,
-        blockchainTransactionId: result.blockchainTransactionId
+        blockchainRegistered: result.blockchainRegistered || !!blockchainData,
+        blockchainTransactionId: result.blockchainTransactionId,
+        blockchainData: blockchainData
       },
       message: result.message
     });
@@ -150,10 +162,16 @@ const getProduct = async (req: Request, res: Response) => {
     const product = await ProductService.getProduct(productId);
 
     if (product) {
+      // Get blockchain data for this product
+      const blockchainData = await getProductBlockchainData(productId);
+      
       return res.status(200).json({
         success: true,
         data: {
-          product
+          product: {
+            ...product,
+            blockchain: blockchainData
+          }
         }
       });
     } else {
@@ -170,6 +188,48 @@ const getProduct = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * Helper function to get blockchain data for a product
+ * @param productId Product ID to get blockchain data for
+ * @returns Blockchain data if available
+ */
+async function getProductBlockchainData(productId: string): Promise<any> {
+  try {
+    // Try to get creation transaction for this product
+    const { TransactionHistoryService } = require("../../core/TransactionHistory");
+    const transactions = await TransactionHistoryService.getProductTransactionHistory(productId);
+    
+    // Look for creation transaction
+    const creationTx = transactions.find((tx: { actionType: string }) => tx.actionType === 'CREATE');
+    
+    if (creationTx?.blockchain) {
+      return creationTx.blockchain;
+    }
+    
+    if (creationTx?.blockHash && creationTx?.transactionHash) {
+      return {
+        blockHeight: 0, // We don't have this info
+        blockHash: creationTx.blockHash,
+        transactionHash: creationTx.transactionHash,
+        timestamp: creationTx.timestamp,
+        validator: "agrichain-node-1"
+      };
+    }
+    
+    // If no blockchain data found
+    return {
+      status: "Pending",
+      message: "Product not yet recorded on blockchain"
+    };
+  } catch (error) {
+    console.error("Error getting blockchain data for product:", error);
+    return {
+      status: "Error",
+      message: "Failed to fetch blockchain data"
+    };
+  }
+}
 
 /**
  * Get all products owned by a specific user
@@ -306,10 +366,18 @@ export const getAllProducts = async (req: Request, res: Response) => {
   try {
     const products = await ProductService.getAllProducts();
     
+    // Filter out any objects that are just transaction references
+    // Valid products must have id, ownerId, and name fields
+    const validProducts = products.filter(product => 
+      product.id && 
+      product.ownerId && 
+      product.name
+    );
+    
     return res.status(200).json({
       success: true,
       data: {
-        products
+        products: validProducts
       }
     });
   } catch (error) {

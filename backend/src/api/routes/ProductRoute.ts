@@ -37,31 +37,22 @@ const ensureFarmerAccess = (req: Request, res: Response, next: Function) => {
 
 // Get all products
 router.get("/", getAllProducts);
-
 // Create a new product
 router.post("/", authenticateJWT, ensureFarmerAccess, productCreationRateLimiter, createProduct);
-
 // Get the latest status of a product
 router.get("/status/:productId", productManagementController.getProductStatus);
-
 // Get product by ID
 router.get("/:productId", trackProductView, getProduct);
-
 // Get all products owned by a specific user
 router.get("/owner/:ownerId", getProductsByOwner);
-
 // Produk akan otomatis di-receive saat transfer antar role
 router.post("/transfer", authenticateJWT, trackProductTransaction, ProductTransferController.transferProduct);
-
 // Verify product quality and update status
 router.post("/verify", authenticateJWT, productManagementController.verifyProduct);
-
 // Get verification status and consensus information for a product
 router.get("/verifications/:productId", productManagementController.getProductVerifications);
-
 // Check if consensus has been reached and update product status if needed
 router.post("/check-consensus/:productId", authenticateJWT, productManagementController.checkVerificationConsensus);
-
 // Get consensus status for a product
 router.get("/consensus/:productId", productManagementController.getProductVerifications);
 

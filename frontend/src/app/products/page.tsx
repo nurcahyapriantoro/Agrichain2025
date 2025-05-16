@@ -100,21 +100,19 @@ export default function ProductsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState('name'); // 'name', 'id', 'owner'
-  const [statusFilter, setStatusFilter] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null); // Now represents owner role filter
   const [maxPages, setMaxPages] = useState(5); // Add max pages limit
   
-  // Filter options
+  // Owner role filter options
   const filterOptions = [
     { label: 'All', value: null },
-    { label: 'Created', value: DisplayStatus.CREATED },
-    { label: 'Transferred', value: DisplayStatus.TRANSFERRED },
-    { label: 'Verified', value: DisplayStatus.VERIFIED },
-    { label: 'Received', value: DisplayStatus.RECEIVED },
+    { label: 'FARMER', value: 'FARMER' },
+    { label: 'COLLECTOR', value: 'COLLECTOR' },
+    { label: 'TRADER', value: 'TRADER' },
+    { label: 'RETAILER', value: 'RETAILER' },
   ];
   
   // References for infinite scroll
@@ -140,20 +138,14 @@ export default function ProductsPage() {
     params.append('sortBy', 'createdAt');
     params.append('sortOrder', 'desc');
     
-    // Add search parameters if provided
+    // Add search parameters if provided - always search by name
     if (searchQuery) {
-      if (searchType === 'name') {
-        params.append('name', searchQuery);
-      } else if (searchType === 'id') {
-        params.append('id', searchQuery);
-      } else if (searchType === 'owner') {
-        params.append('ownerId', searchQuery);
-      }
+      params.append('name', searchQuery);
     }
     
-    // Add status filter if selected
+    // Add owner role filter if selected
     if (activeFilter) {
-      params.append('status', activeFilter);
+      params.append('ownerRole', activeFilter);
     }
     
     return params.toString();
@@ -162,21 +154,22 @@ export default function ProductsPage() {
   // Initial fetch
   useEffect(() => {
     resetAndFetchProducts();
-  }, [searchQuery, searchType, activeFilter]);
+  }, [searchQuery, activeFilter]);
   
-  // Custom debounce function using timeout
+  // Handle search input change with immediate filtering
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    setSearchQuery(value);
     
-    // Clear any existing timeout
+    // Reset and fetch products with the new search term
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     
-    // Set a new timeout
+    // Add a small delay to avoid too many API calls while typing
     searchTimeoutRef.current = setTimeout(() => {
-      setSearchQuery(value);
-    }, 500);
+      resetAndFetchProducts();
+    }, 300);
   };
   
   const resetAndFetchProducts = () => {
@@ -271,10 +264,47 @@ export default function ProductsPage() {
       newProducts = [];
     }
     
+    // Filter products by name search and owner role
+    let filteredProducts = newProducts;
+    
+    // Skip non-product entries without required fields
+    filteredProducts = filteredProducts.filter(product => 
+      product && product.ownerId && product.name
+    );
+    
+    // Filter by search query (case insensitive)
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      filteredProducts = filteredProducts.filter(product => 
+        product.name && product.name.toLowerCase().includes(query)
+      );
+    }
+    
+    // Filter by owner role if active
+    if (activeFilter) {
+      filteredProducts = filteredProducts.filter(product => {
+        const ownerIdUpperCase = product.ownerId.toUpperCase();
+        const ownerNameUpperCase = product.ownerName ? product.ownerName.toUpperCase() : '';
+        
+        switch(activeFilter) {
+          case 'FARMER':
+            return ownerIdUpperCase.includes('FARM') || ownerNameUpperCase.includes('FARMER');
+          case 'COLLECTOR':
+            return ownerIdUpperCase.includes('COLL') || ownerNameUpperCase.includes('COLLECTOR');
+          case 'TRADER':
+            return ownerIdUpperCase.includes('TRAD') || ownerNameUpperCase.includes('TRADER');
+          case 'RETAILER':
+            return ownerIdUpperCase.includes('RET') || ownerNameUpperCase.includes('RETAILER');
+          default:
+            return true;
+        }
+      });
+    }
+      
     if (isReset) {
-      setProducts(newProducts);
+      setProducts(filteredProducts);
     } else {
-      setProducts(prev => [...prev, ...newProducts]);
+      setProducts(prev => [...prev, ...filteredProducts]);
     }
     
     // Check if there are more products to load
@@ -293,6 +323,8 @@ export default function ProductsPage() {
   // Handle filter change
   const handleFilterChange = (filter: string | null) => {
     setActiveFilter(filter);
+    // Force an immediate reset and fetch with the new filter
+    resetAndFetchProducts();
   };
   
   // Clear all filters
@@ -304,26 +336,62 @@ export default function ProductsPage() {
     if (searchInput) searchInput.value = '';
   };
 
-  // Check if product is with retailer to show RECEIVED status
+  // Update the getDisplayStatus function to provide more context
   const getDisplayStatus = (product: Product) => {
+    // Determine the role for context
+    let roleContext = '';
+    
+    // Check both ownerName and ownerId for role indicators
+    if (product.ownerName) {
+      if (product.ownerName.toUpperCase().includes('COLLECTOR')) {
+        roleContext = ' AT COLLECTOR';
+      } else if (product.ownerName.toUpperCase().includes('RETAILER')) {
+        roleContext = ' AT RETAILER';
+      } else if (product.ownerName.toUpperCase().includes('TRADER')) {
+        roleContext = ' AT TRADER';
+      } else if (product.ownerName.toUpperCase().includes('FARMER')) {
+        roleContext = ' AT FARMER';
+      }
+    }
+    
+    // If role not found in ownerName, check ownerId
+    if (!roleContext && product.ownerId) {
+      if (product.ownerId.includes('COLL-')) {
+        roleContext = ' AT COLLECTOR';
+      } else if (product.ownerId.includes('RET-')) {
+        roleContext = ' AT RETAILER';
+      } else if (product.ownerId.includes('TRAD-')) {
+        roleContext = ' AT TRADER';
+      } else if (product.ownerId.includes('FARM-')) {
+        roleContext = ' AT FARMER';
+      }
+    }
+    
+    // If still no role context, check if metadata has hints
+    if (!roleContext && product.metadata) {
+      if (product.metadata.recipientRole) {
+        roleContext = ` AT ${product.metadata.recipientRole.toUpperCase()}`;
+      }
+    }
+
     // Only show RECEIVED when the product is with a retailer
     if (product.status?.toUpperCase() === ProductStatus.TRANSFERRED && 
         (product.ownerName?.toUpperCase().includes('RETAILER') || 
-         product.owner?.includes('RET-') || 
+         product.ownerId?.includes('RET-') || 
          product.metadata?.recipientRole?.toUpperCase() === 'RETAILER')) {
-      return DisplayStatus.RECEIVED;
+      return DisplayStatus.RECEIVED + roleContext;
     }
     
     // For other cases, normalize to one of our supported statuses
     switch(product.status?.toUpperCase()) {
       case ProductStatus.CREATED:
-        return DisplayStatus.CREATED;
+        return DisplayStatus.CREATED + roleContext;
       case ProductStatus.TRANSFERRED:
-        return DisplayStatus.TRANSFERRED;
+        return DisplayStatus.TRANSFERRED + roleContext;
       case ProductStatus.VERIFIED:
-        return DisplayStatus.VERIFIED;
+        return DisplayStatus.VERIFIED + roleContext;
       default:
-        return product.status;
+        return (product.status || 'UNKNOWN') + roleContext;
     }
   };
 
@@ -351,38 +419,42 @@ export default function ProductsPage() {
         <div className="max-w-[1920px] mx-auto px-6 sm:px-8 lg:px-12 mt-8">
           <div className="flex flex-col md:flex-row md:items-center gap-6 mb-8">
             {/* Search Bar with neon gradient border */}
-            <div className="bg-gradient-to-r from-[#00ffcc] to-[#a259ff] p-[2px] rounded-xl">
+            <div className="bg-gradient-to-r from-[#00ffcc] to-[#a259ff] p-[2px] rounded-xl relative">
               <Input
                 id="product-search"
                 placeholder="Search products..."
                 onChange={handleSearchInputChange}
-                className="font-space bg-[#18122B] text-[#a259ff] placeholder:text-[#a259ff] focus:outline-none rounded-xl px-6 py-3 w-full md:w-96 text-lg border-none shadow-none"
+                value={searchQuery}
+                className="font-space bg-[#18122B] text-[#a259ff] placeholder:text-[#a259ff] focus:outline-none rounded-xl px-6 py-3 w-full md:w-96 text-lg border-none shadow-none pr-12"
                 style={{ boxShadow: 'none' }}
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => {
+                    setSearchQuery('');
+                    resetAndFetchProducts();
+                  }}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#a259ff] hover:text-[#00ffcc] transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              )}
             </div>
-            {/* Select Dropdown with neon gradient border */}
-            <div className="bg-gradient-to-r from-[#a259ff] to-[#00ffcc] p-[2px] rounded-xl">
-              <Select
-                value={searchType}
-                onValueChange={setSearchType}
-                className="font-space bg-[#18122B] text-white focus:outline-none rounded-xl px-6 py-3 w-full md:w-48 text-lg border-none shadow-none font-bold"
-                style={{ boxShadow: 'none' }}
-              >
-                <option value="name">Name</option>
-                <option value="id">ID</option>
-                <option value="owner">Owner</option>
-              </Select>
-            </div>
+
             <div className="flex gap-3 flex-wrap">
               {filterOptions.map((opt, index) => (
                 <button
                   key={`filter-${opt.value ?? 'all'}-${index}`}
                   onClick={() => handleFilterChange(opt.value)}
                   className={clsx(
-                    'px-4 py-2 rounded-xl font-space text-sm font-bold border transition-all duration-300',
-                    activeFilter === opt.value || (!activeFilter && !opt.value)
-                      ? 'bg-[#00ffcc] text-[#18122B] border-[#00ffcc] shadow-[0_0_10px_#00ffcc77] animate-glow'
-                      : 'bg-[#232526] text-[#a259ff] border-[#a259ff] hover:bg-[#a259ff] hover:text-white hover:shadow-[0_0_10px_#a259ff77]'
+                    'px-5 py-2 rounded-xl font-space text-sm font-bold border transition-all duration-300',
+                    // Custom styling for each role filter
+                    activeFilter === 'FARMER' && opt.value === 'FARMER' ? 'bg-green-600 text-white border-green-500 shadow-[0_0_10px_#22c55e77]' :
+                    activeFilter === 'COLLECTOR' && opt.value === 'COLLECTOR' ? 'bg-blue-600 text-white border-blue-500 shadow-[0_0_10px_#3b82f677]' :
+                    activeFilter === 'TRADER' && opt.value === 'TRADER' ? 'bg-amber-600 text-white border-amber-500 shadow-[0_0_10px_#f59e0b77]' :
+                    activeFilter === 'RETAILER' && opt.value === 'RETAILER' ? 'bg-purple-600 text-white border-purple-500 shadow-[0_0_10px_#9333ea77]' :
+                    !opt.value && !activeFilter ? 'bg-[#00ffcc] text-[#18122B] border-[#00ffcc] shadow-[0_0_10px_#00ffcc77] animate-glow' :
+                    'bg-[#232526] text-[#a259ff] border-[#a259ff] hover:bg-[#a259ff] hover:text-white hover:shadow-[0_0_10px_#a259ff77]'
                   )}
                 >
                   {opt.label}
@@ -409,42 +481,63 @@ export default function ProductsPage() {
                 <div className="col-span-full text-center text-[#a259ff] font-space animate-fadeIn text-lg">No products found.</div>
               ) : (
                 products.map((product, idx) => (
-                  <div
-                    key={`product-${product.id}-${idx}`}
-                    ref={idx === products.length - 1 ? lastProductElementRef : undefined}
-                    className={clsx(
-                      'relative rounded-2xl p-6 pt-10 bg-gradient-to-br from-[#232526cc] to-[#18122Bcc] border-2 shadow-[0_0_30px_#00ffcc33] animate-fadeIn transition-all duration-500',
-                      idx % 2 === 0 ? 'border-[#a259ff]' : 'border-[#00ffcc]',
-                      'hover:scale-105 hover:shadow-[0_0_60px_#00ffcc77] cursor-pointer group'
-                    )}
-                  >
-                    {/* Product ID in top-left */}
-                    <span className="absolute left-6 top-4 font-fira text-xs text-gray-500 mb-2 select-text">
-                      {(() => {
-                        if (!product.id) return '';
-                        const parts = product.id.split('-');
-                        return `prod-${parts[parts.length - 1]}`;
-                      })()}
-                    </span>
-                    {/* Status badge in top-right */}
-                    <span className={clsx(
-                      'absolute right-6 top-3 px-5 py-2 rounded-2xl font-space text-base font-extrabold border shadow-lg transition-all duration-300',
-                      'glow-status',
-                      getDisplayStatus(product) === DisplayStatus.CREATED && 'bg-blue-500/30 text-blue-300 border-blue-400 animate-pulse',
-                      getDisplayStatus(product) === DisplayStatus.TRANSFERRED && 'bg-purple-500/30 text-purple-300 border-purple-400 animate-pulse',
-                      getDisplayStatus(product) === DisplayStatus.VERIFIED && 'bg-green-500/30 text-green-300 border-green-400 animate-pulse',
-                      getDisplayStatus(product) === DisplayStatus.RECEIVED && 'bg-teal-500/30 text-teal-300 border-teal-400 animate-pulse',
-                    )}>
-                      {getDisplayStatus(product)}
-                    </span>
+                                      <div
+                      key={`product-${product.id}-${idx}`}
+                      ref={idx === products.length - 1 ? lastProductElementRef : undefined}
+                      className={clsx(
+                        'relative rounded-2xl p-6 bg-gradient-to-br from-[#232526cc] to-[#18122Bcc] border-2 shadow-[0_0_30px_#00ffcc33] animate-fadeIn transition-all duration-500',
+                        idx % 2 === 0 ? 'border-[#a259ff]' : 'border-[#00ffcc]',
+                        'hover:scale-105 hover:shadow-[0_0_60px_#00ffcc77] cursor-pointer group'
+                      )}
+                    >
+                      {/* Status badge in top-right - make it more visible */}
+                      <span className={clsx(
+                        'absolute right-6 top-3 px-4 py-1.5 rounded-xl font-space text-sm font-bold border shadow-lg transition-all duration-300',
+                        'glow-status',
+                        getDisplayStatus(product).includes(DisplayStatus.CREATED) && 'bg-blue-500/30 text-blue-300 border-blue-400 animate-pulse',
+                        getDisplayStatus(product).includes(DisplayStatus.TRANSFERRED) && 'bg-purple-500/30 text-purple-300 border-purple-400 animate-pulse',
+                        getDisplayStatus(product).includes(DisplayStatus.VERIFIED) && 'bg-green-500/30 text-green-300 border-green-400 animate-pulse',
+                        getDisplayStatus(product).includes(DisplayStatus.RECEIVED) && 'bg-teal-500/30 text-teal-300 border-teal-400 animate-pulse',
+                      )}>
+                        {getDisplayStatus(product)}
+                      </span>
+                    
                     {/* Main content */}
-                    <h2 className="text-2xl font-orbitron text-[#a259ff] mb-2 mt-2 group-hover:text-[#00ffcc] transition-colors duration-300">{product.name}</h2>
-                    <p className="text-base font-space text-gray-300 mb-2">Owner: <span className="text-[#00ffcc] font-fira">{product.ownerName || product.owner}</span></p>
-                    <p className="text-sm font-space text-gray-400 mb-1">Created: {new Date(product.createdAt).toLocaleString()}</p>
-                    <p className="text-sm font-space text-gray-400 mb-4">Last Updated: {new Date(product.updatedAt).toLocaleString()}</p>
-                    <div className="flex justify-between items-center mt-4">
-                      <span className="font-space text-xl text-[#00ffcc] font-bold">{formatRupiah(product.price)}</span>
-                      <Link href={`/products/${product.id}`} className="font-orbitron text-sm text-[#a259ff] hover:text-[#00ffcc] underline underline-offset-4 transition-colors duration-300">View Details</Link>
+                    <div className="mt-6">
+                      <h2 className="text-2xl font-orbitron text-[#a259ff] mb-3 group-hover:text-[#00ffcc] transition-colors duration-300">
+                        {product.name}
+                      </h2>
+                      
+                      <div className="grid grid-cols-1 gap-2 mb-3">
+                        <p className="text-base font-space text-gray-300">
+                          <span className="text-gray-400 text-sm">Owner:</span> 
+                          <span className="text-[#00ffcc] font-fira ml-1">{product.ownerName || "Unknown"}</span>
+                        </p>
+                        
+                        <p className="text-base font-space text-gray-300">
+                          <span className="text-gray-400 text-sm">Owner ID:</span> 
+                          <span className="text-[#00ffcc] font-fira ml-1">{product.ownerId || "N/A"}</span>
+                        </p>
+                        
+                        <p className="text-base font-space text-gray-300">
+                          <span className="text-gray-400 text-sm">Quality:</span> 
+                          <span className="text-[#00ffcc] font-fira ml-1">
+                            {product.metadata?.qualityScore ? `${product.metadata.qualityScore}/100` : 'N/A'}
+                          </span>
+                        </p>
+                        
+                        <p className="text-base font-space text-gray-300">
+                          <span className="text-gray-400 text-sm">Location:</span> 
+                          <span className="text-[#00ffcc] font-fira ml-1">
+                            {product.metadata?.location || 'Unknown'}
+                          </span>
+                        </p>
+                      </div>
+                      
+                      <div className="flex justify-between items-center mt-4">
+                        <span className="font-space text-xl text-[#00ffcc] font-bold">{formatRupiah(product.price)}</span>
+                        <Link href={`/products/${product.id}`} className="font-orbitron text-sm text-[#a259ff] hover:text-[#00ffcc] underline underline-offset-4 transition-colors duration-300">View Details</Link>
+                      </div>
                     </div>
                   </div>
                 ))
