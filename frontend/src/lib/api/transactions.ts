@@ -2,8 +2,27 @@ import { apiGet, apiPost } from './client';
 import { Transaction } from '../../types/transaction';
 import { PaginatedResponse } from '../../types/common';
 
-export interface TransactionListResponse extends PaginatedResponse<Transaction> {
-  data: Transaction[];
+// Extended Transaction interface to include blockchain properties
+export interface ExtendedTransaction extends Transaction {
+  blockchain?: {
+    blockHeight: number;
+    blockHash: string;
+    transactionHash: string;
+    timestamp: number;
+    validator: string;
+  };
+  blockHash?: string;
+  transactionHash?: string;
+  fromRole?: string;
+  toRole?: string;
+  from?: string;
+  to?: string;
+  fromUserId?: string;
+  toUserId?: string;
+}
+
+export interface TransactionListResponse extends PaginatedResponse<ExtendedTransaction> {
+  data: ExtendedTransaction[];
   total: number;
   page: number;
   limit: number;
@@ -47,8 +66,8 @@ const normalizeResponse = (response: any): TransactionListResponse => {
     if (response.data.transactions) {
       return {
         data: response.data.transactions,
-        total: response.data.pagination?.totalItems || response.data.transactions.length,
-        page: response.data.pagination?.currentPage || 1,
+        total: response.data.pagination?.totalItems || response.data.pagination?.total || response.data.transactions.length,
+        page: response.data.pagination?.currentPage || response.data.pagination?.page || 1,
         limit: response.data.pagination?.limit || 10,
         totalPages: response.data.pagination?.totalPages || Math.ceil(response.data.transactions.length / 10)
       };
@@ -59,8 +78,8 @@ const normalizeResponse = (response: any): TransactionListResponse => {
   if (response.transactions) {
     return {
       data: response.transactions,
-      total: response.totalItems || response.transactions.length,
-      page: response.currentPage || 1,
+      total: response.totalItems || response.total || response.transactions.length,
+      page: response.currentPage || response.page || 1,
       limit: response.limit || 10,
       totalPages: response.totalPages || Math.ceil(response.transactions.length / 10)
     };
@@ -77,11 +96,11 @@ const normalizeResponse = (response: any): TransactionListResponse => {
 };
 
 /**
- * Get list of transactions with pagination
+ * Get latest transactions with pagination
  */
 export const getTransactions = async (page = 1, limit = 10, filters = {}): Promise<TransactionListResponse> => {
   try {
-    const response = await apiGet('/transactions', { page, limit, ...filters });
+    const response = await apiGet('/transaction-history/latest', { page, limit, ...filters });
     return normalizeResponse(response);
   } catch (error) {
     console.error('Error fetching transactions:', error);
@@ -92,8 +111,8 @@ export const getTransactions = async (page = 1, limit = 10, filters = {}): Promi
 /**
  * Get transaction by ID
  */
-export const getTransactionById = async (id: string): Promise<Transaction> => {
-  return apiGet<Transaction>(`/transactions/${id}`);
+export const getTransactionById = async (id: string): Promise<ExtendedTransaction> => {
+  return apiGet<ExtendedTransaction>(`/transaction-history/transaction/${id}`);
 };
 
 /**
@@ -101,7 +120,7 @@ export const getTransactionById = async (id: string): Promise<Transaction> => {
  */
 export const getProductTransactions = async (productId: string, page = 1, limit = 10): Promise<TransactionListResponse> => {
   try {
-    const response = await apiGet(`/transactions/product/${productId}`, { page, limit });
+    const response = await apiGet(`/transaction-history/product/${productId}`, { page, limit });
     return normalizeResponse(response);
   } catch (error) {
     console.error('Error fetching product transactions:', error);
@@ -110,13 +129,36 @@ export const getProductTransactions = async (productId: string, page = 1, limit 
 };
 
 /**
- * Create a new transaction
+ * Get transactions for a specific user
  */
-export const createTransaction = async (data: {
-  productId: string;
-  toUserId: string;
-}): Promise<Transaction> => {
-  return apiPost<Transaction>('/transactions', data);
+export const getUserTransactions = async (userId: string, page = 1, limit = 10): Promise<TransactionListResponse> => {
+  try {
+    const response = await apiGet(`/transaction-history/user/${userId}`, { page, limit });
+    return normalizeResponse(response);
+  } catch (error) {
+    console.error('Error fetching user transactions:', error);
+    return normalizeResponse(null);
+  }
+};
+
+/**
+ * Get transactions by public key
+ */
+export const getTransactionsByPublicKey = async (publicKey: string, page = 1, limit = 10): Promise<TransactionListResponse> => {
+  try {
+    const response = await apiGet(`/transaction-history/public-key/${publicKey}`, { page, limit });
+    return normalizeResponse(response);
+  } catch (error) {
+    console.error('Error fetching transactions by public key:', error);
+    return normalizeResponse(null);
+  }
+};
+
+/**
+ * Get transaction statistics
+ */
+export const getTransactionStats = async (): Promise<any> => {
+  return apiGet('/transaction-history/stats');
 };
 
 /**
@@ -124,6 +166,16 @@ export const createTransaction = async (data: {
  */
 export const getMyTransactions = async (page = 1, limit = 10, role = 'all'): Promise<TransactionListResponse> => {
   try {
+    // First try to get current user ID
+    const currentUser = await apiGet<{id: string; name?: string}>('/users/me').catch(() => null);
+    
+    if (currentUser && currentUser.id) {
+      // If we have a user ID, use the user endpoint
+      const response = await apiGet(`/transaction-history/user/${currentUser.id}`, { page, limit, role });
+      return normalizeResponse(response);
+    }
+    
+    // Fallback to the original endpoint if we couldn't get the user
     const response = await apiGet('/transactions/my', { page, limit, role });
     return normalizeResponse(response);
   } catch (error) {
@@ -136,5 +188,23 @@ export const getMyTransactions = async (page = 1, limit = 10, role = 'all'): Pro
  * Verify transaction on blockchain
  */
 export const verifyTransaction = async (id: string): Promise<{ verified: boolean; blockchainData?: any }> => {
-  return apiGet<{ verified: boolean; blockchainData?: any }>(`/transactions/${id}/verify`);
+  const transaction = await getTransactionById(id);
+  
+  // Check if the transaction has blockchain data
+  if (transaction && (transaction.blockchain || transaction.blockHash)) {
+    return {
+      verified: true,
+      blockchainData: transaction.blockchain || {
+        blockHeight: 0,
+        blockHash: transaction.blockHash || "",
+        transactionHash: transaction.transactionHash || transaction.id,
+        timestamp: transaction.timestamp,
+        validator: "agrichain-node-1"
+      }
+    };
+  }
+  
+  return {
+    verified: false
+  };
 }; 

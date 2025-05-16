@@ -7,14 +7,21 @@ import { ProductStatus } from "../enum";
 import { ContractRegistry } from "../contracts/ContractRegistry";
 import BlockchainIntegration from "./BlockchainIntegration";
 
+// Update the interface for blockchain integration return type to include blockHeight
+interface BlockchainResult {
+  success: boolean;
+  transactionHash?: string;
+  blockHash?: string;
+  blockHeight?: number;
+  timestamp?: number;
+}
+
 // ID kontrak untuk pengelolaan produk
 const contractId = 'product-management-v1';
 
 interface ProductData {
   id: string;
   ownerId: string;
-  owner?: string; // For frontend compatibility
-  farmerId?: string; // For frontend compatibility
   name: string;
   description?: string;
   quantity?: number;
@@ -32,6 +39,14 @@ interface ProductTransferParams {
   newOwnerId: string;
   role: UserRole;
   details?: Record<string, any>;
+}
+
+interface BlockchainData {
+  blockHeight: number;
+  blockHash: string;
+  transactionHash: string;
+  timestamp: number;
+  validator: string;
 }
 
 /**
@@ -64,9 +79,9 @@ class ProductService {
         }
         
         // Add owner name if available
-        if (productData && (productData.ownerId || productData.farmerId)) {
+        if (productData && productData.ownerId) {
           try {
-            const ownerId = productData.ownerId || productData.farmerId;
+            const ownerId = productData.ownerId;
             // Try to get user data from database
             const userData = await txhashDB.get(`user:${ownerId}`).catch(() => null);
             
@@ -214,20 +229,28 @@ class ProductService {
   }
   
   /**
-   * Create a new product with the farmer as the initial owner and register it in blockchain
-   * @param farmerId ID of the farmer creating the product
+   * Create a new product with the user as the initial owner and register it in blockchain
+   * @param ownerId ID of the user creating the product
    * @param productData Data produk (name, description, quantity, price, metadata, status)
    * @param details Informasi tambahan yang akan direkam dalam transaksi
    * @returns Result of the product creation
    */
   static async createProduct(
-    farmerId: string, 
+    ownerId: string, 
     productData: Omit<ProductData, 'id' | 'ownerId' | 'createdAt' | 'updatedAt'>,
     details?: Record<string, any>
-  ): Promise<{ success: boolean; productId?: string; message?: string; transactionId?: string; blockchainRegistered?: boolean; blockchainTransactionId?: string | null }> {
+  ): Promise<{ 
+    success: boolean; 
+    productId?: string; 
+    message?: string; 
+    transactionId?: string; 
+    blockchainRegistered?: boolean; 
+    blockchainTransactionId?: string | null;
+    blockchainData?: BlockchainData;
+  }> {
     try {
       // Verify that the creator is a farmer
-      const farmerRole = await RoleService.getUserRole(farmerId);
+      const farmerRole = await RoleService.getUserRole(ownerId);
       
       if (farmerRole !== UserRole.FARMER) {
         return {
@@ -242,9 +265,7 @@ class ProductService {
       // Create the product
       const newProduct: ProductData = {
         id: productId,
-        ownerId: farmerId,
-        owner: farmerId,
-        farmerId: farmerId,
+        ownerId: ownerId,
         ...productData,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -266,13 +287,14 @@ class ProductService {
       // Record the product creation in the database through Transaction History Service
       const historyResult = await TransactionHistoryService.recordProductCreation(
         productId,
-        farmerId,
+        ownerId,
         details
       );
       
       // Mencoba mendaftarkan produk ke blockchain
       let blockchainRegistered = false;
       let blockchainTransactionId = null;
+      let blockchainData = historyResult.blockchainData;
       
       try {
         // Get user's private key - in a real world scenario, this should be securely provided by the user
@@ -281,9 +303,9 @@ class ProductService {
         
         // Gunakan BlockchainIntegration untuk mencatat ke blockchain
         const blockchainIntegration = BlockchainIntegration.getInstance();
-        const blockchainResult = await blockchainIntegration.recordProductCreation(
+        const blockchainResult: BlockchainResult = await blockchainIntegration.recordProductCreation(
           productId,
-          farmerId,
+          ownerId,
           simulatedPrivateKey,
           {
             ...newProduct,
@@ -298,6 +320,17 @@ class ProductService {
         if (blockchainResult.success) {
           blockchainRegistered = true;
           blockchainTransactionId = blockchainResult.transactionHash || undefined;
+          
+          // If we have a transaction hash but no blockchain data from history service
+          if (blockchainTransactionId && !blockchainData) {
+            blockchainData = {
+              blockHeight: blockchainResult.blockHeight || 0,
+              blockHash: blockchainResult.blockHash || "",
+              transactionHash: blockchainTransactionId,
+              timestamp: Date.now(),
+              validator: 'agrichain-node-1'
+            };
+          }
         }
       } catch (blockchainError) {
         console.error("Error registering product to blockchain:", blockchainError);
@@ -310,7 +343,8 @@ class ProductService {
         message: `Product created successfully with ID: ${productId}`,
         transactionId: historyResult.transactionId,
         blockchainRegistered,
-        blockchainTransactionId
+        blockchainTransactionId,
+        blockchainData
       };
     } catch (error) {
       console.error("Error creating product:", error);
@@ -331,10 +365,13 @@ class ProductService {
       // Implementasi yang lebih baik untuk mendapatkan produk berdasarkan pemilik
       const products: ProductData[] = [];
       
-      // Buat fungsi untuk mendapatkan semua kunci produk
-      // Ini hanya simulasi, implementasi sebenarnya tergantung pada database Anda
+      // Get all product keys (excluding transaction references)
       const allKeys = await txhashDB.keys().all();
-      const productKeys = allKeys.filter(key => key.toString().startsWith('product:'));
+      const productKeys = allKeys.filter(key => {
+        const keyStr = key.toString();
+        // Match only keys with the pattern "product:{id}" (no additional colons)
+        return keyStr.startsWith('product:') && keyStr.split(':').length === 2;
+      });
       
       // Iterasi semua produk
       for (const key of productKeys) {
@@ -355,8 +392,8 @@ class ProductService {
             productData = data;
           }
           
-          // Now check if it matches the owner
-          if (productData && productData.ownerId === ownerId) {
+          // Now check if it matches the owner and is a valid product
+          if (productData && productData.id && productData.ownerId === ownerId) {
             products.push(productData);
           }
         } catch (productError) {
@@ -380,7 +417,14 @@ class ProductService {
     try {
       // Get all product keys
       const allKeys = await txhashDB.keys().all();
-      const productKeys = allKeys.filter(key => key.toString().startsWith('product:'));
+      
+      // Filter to get only product keys (exact match for product:{id} format)
+      // This excludes transaction references like product:{id}:transaction:{txid}
+      const productKeys = allKeys.filter(key => {
+        const keyStr = key.toString();
+        // Match only keys with the pattern "product:{id}" (no additional colons)
+        return keyStr.startsWith('product:') && keyStr.split(':').length === 2;
+      });
       
       // Get all products with proper type checking
       const products: ProductData[] = [];
@@ -403,7 +447,8 @@ class ProductService {
             productData = data;
           }
           
-          if (productData) {
+          // Check if it has required product fields to confirm it's a valid product
+          if (productData && productData.id && productData.ownerId) {
             products.push(productData);
           }
         } catch (productError) {

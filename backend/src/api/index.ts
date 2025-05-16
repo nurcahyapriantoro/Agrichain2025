@@ -26,12 +26,10 @@ import TransactionRoute from "./routes/TransactionRoute"
 import RoleRoute from "./routes/RoleRoute"
 import NotificationRoute from "./routes/NotificationRoute"
 import TransactionHistoryRoute from "./routes/TransactionHistoryRoute"
+import BlockchainExplorerRoute from "./routes/BlockchainExplorerRoute"
 
 // Import new routes
 import ProductSearchRoute from "./routes/ProductSearchRoute"
-import ProductBatchRoute from "./routes/ProductBatchRoute"
-import ProductVersionRoute from "./routes/ProductVersionRoute"
-import WebhookRoute from "./routes/WebhookRoute"
 import SynchronizationRoute from "./routes/SynchronizationRoute"
 import CustomRoute from "./routes/CustomRoute"
 import FormAuthRoute from "./routes/Auth/FormAuthRoute"
@@ -183,6 +181,7 @@ const api = (
   app.use("/api/auth/form", FormAuthRoute)
   app.use("/api/auth/google", GoogleAuthRoute)
   app.use("/api/auth/web3", Web3AuthRoute)
+  app.use("/api/explorer", BlockchainExplorerRoute)
   
   app.use(errorLogger)
   app.use(catch404Error)

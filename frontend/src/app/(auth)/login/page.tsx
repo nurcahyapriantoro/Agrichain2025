@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
+import { FaGoogle } from 'react-icons/fa';
+import { UserRole } from '@/lib/types';
 
 declare global {
   interface Window {
@@ -36,7 +38,6 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ethereum) {
       setMetamaskAvailable(true);
-      
       // Reset wallet connection - don't check for accounts
       setWalletAddress(null);
     }
@@ -102,7 +103,7 @@ export default function LoginPage() {
             console.log('Attempting direct API login as fallback...');
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
             
-            const response = await fetch(`${apiUrl}/user/login`, {
+            const response = await fetch(`${apiUrl}/auth/form/login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -229,16 +230,39 @@ export default function LoginPage() {
       console.log('MetaMask login result:', data);
       
       if (data.success) {
-        // Save auth token and user data
+        // Simpan token autentikasi
+        localStorage.setItem('walletAuthToken', data.token);
         localStorage.setItem('web3AuthToken', data.token);
         localStorage.setItem('walletAddress', address);
-        localStorage.setItem('walletUserData', JSON.stringify({
+        
+        // Buat objek userData yang lengkap
+        const userData = {
           id: data.user.id,
-          name: data.user.name || data.user.profile?.name,
-          role: data.user.role,
-          walletAddress: data.user.walletAddress,
+          name: data.user.name || data.user.profile?.name || `Wallet ${address.substring(0, 6)}`,
+          role: data.user.role || UserRole.FARMER, // Pastikan role ada
+          walletAddress: data.user.walletAddress || address,
           authMethods: data.user.authMethods || ['metamask']
-        }));
+        };
+        
+        // Simpan userData ke localStorage
+        localStorage.setItem('walletUserData', JSON.stringify(userData));
+        
+        // Buat format sesi yang kompatibel dengan yang diharapkan aplikasi
+        const sessionData = {
+          user: userData,
+          accessToken: data.token
+        };
+        
+        // Simpan ke sessionStorage untuk API client
+        sessionStorage.setItem('session', JSON.stringify(sessionData));
+        
+        console.log('Wallet login berhasil, data tersimpan:', {
+          'walletAuthToken': localStorage.getItem('walletAuthToken'),
+          'web3AuthToken': localStorage.getItem('web3AuthToken'),
+          'walletAddress': localStorage.getItem('walletAddress'),
+          'walletUserData': localStorage.getItem('walletUserData'),
+          'session': sessionStorage.getItem('session')
+        });
         
         // Redirect to home
         router.push('/');

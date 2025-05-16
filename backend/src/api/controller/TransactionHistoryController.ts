@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { TransactionHistoryService } from "../../core/TransactionHistory";
+import { TransactionHistoryService, TransactionRecord } from "../../core/TransactionHistory";
 import { TransactionActionType, UserRole, ProductStatus, RecallReason, StockChangeReason } from "../../enum";
 import ProductService from "../../core/ProductService";
 import { txhashDB } from "../../helper/level.db.client";
@@ -40,7 +40,7 @@ export const getProductTransactionHistory = async (req: Request, res: Response) 
     const paginatedTransactions = transactions.slice(startIndex, endIndex);
 
     // Format transactions consistently with the latest transactions endpoint
-    const formattedTransactions = paginatedTransactions.map(tx => ({
+    const formattedTransactions = paginatedTransactions.map((tx: TransactionRecord) => ({
       id: tx.id,
       productId: tx.productId,
       from: tx.fromUserId,
@@ -120,7 +120,7 @@ export const getUserTransactionHistory = async (req: Request, res: Response) => 
     const paginatedTransactions = transactions.slice(startIndex, endIndex);
 
     // Format transactions consistently with other endpoints
-    const formattedTransactions = paginatedTransactions.map(tx => ({
+    const formattedTransactions = paginatedTransactions.map((tx: TransactionRecord) => ({
       id: tx.id,
       productId: tx.productId,
       from: tx.fromUserId,
@@ -202,7 +202,7 @@ export const getTransactionHistoryByPublicKey = async (req: Request, res: Respon
     const paginatedTransactions = transactions.slice(startIndex, endIndex);
 
     // Format transactions consistently with other endpoints
-    const formattedTransactions = paginatedTransactions.map(tx => ({
+    const formattedTransactions = paginatedTransactions.map((tx: TransactionRecord) => ({
       id: tx.id,
       productId: tx.productId,
       from: tx.fromUserId,
@@ -273,7 +273,7 @@ export const getLatestTransactions = async (req: Request, res: Response) => {
     console.log(`Retrieved ${transactions.length} transactions`);
 
     // Format transactions for frontend
-    const formattedTransactions = transactions.map(tx => ({
+    const formattedTransactions = transactions.map((tx: TransactionRecord) => ({
       id: tx.id,
       productId: tx.productId,
       from: tx.fromUserId,
@@ -284,7 +284,14 @@ export const getLatestTransactions = async (req: Request, res: Response) => {
       formattedTime: formatTimeAgo(tx.timestamp),
       type: tx.actionType,
       status: tx.productStatus,
-      details: tx.details || {}
+      details: tx.details || {},
+      blockchainData: tx.blockchain || {
+        blockHeight: 0,
+        blockHash: tx.blockHash || "",
+        transactionHash: tx.transactionHash || "",
+        timestamp: tx.timestamp,
+        validator: "agrichain-node-1"
+      }
     }));
 
     // Send response in the structure frontend expects
@@ -420,7 +427,14 @@ export const getTransactionDetails = async (req: Request, res: Response) => {
       from: transaction.fromUserId,
       to: transaction.toUserId,
       method: transaction.actionType,
-      productDetails
+      productDetails,
+      blockchain: transaction.blockchain || { 
+        blockHeight: 0,
+        blockHash: transaction.blockHash || "",
+        transactionHash: transaction.transactionHash || "",
+        timestamp: transaction.timestamp,
+        validator: "unknown"
+      }
     };
 
     return res.status(200).json({
@@ -464,198 +478,6 @@ function formatTimeAgo(timestamp: number): string {
   const daysAgo = Math.floor(hoursAgo / 24);
   return `${daysAgo} day${daysAgo === 1 ? '' : 's'} ago`;
 }
-
-/**
- * Create a test transaction for demonstration purposes
- */
-export const createTestTransaction = async (req: Request, res: Response) => {
-  try {
-    const { productId, fromUserId, toUserId, type } = req.body;
-    
-    if (!productId || !fromUserId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required parameters: productId and fromUserId are required"
-      });
-    }
-    
-    // Default values
-    const fromRole = req.body.fromRole || UserRole.FARMER;
-    const toRole = req.body.toRole || UserRole.TRADER;
-    const actionType = type || TransactionActionType.TRANSFER;
-    const status = req.body.status || ProductStatus.TRANSFERRED;
-    const details = req.body.details || {
-      name: "Test Product",
-      description: "This is a test product created for demonstration",
-      price: Math.floor(Math.random() * 100000) + 10000,
-      quantity: Math.floor(Math.random() * 10) + 1
-    };
-    
-    // Create a transaction history record
-    const result = await TransactionHistoryService.recordProductTransfer(
-      productId,
-      fromUserId,
-      fromRole,
-      toUserId || fromUserId, // If toUserId not provided, use fromUserId
-      toRole,
-      details
-    );
-    
-    if (result.success) {
-      return res.status(201).json({
-        success: true,
-        message: "Test transaction created successfully",
-        data: {
-          transactionId: result.transactionId,
-          details: {
-            productId,
-            fromUserId,
-            toUserId: toUserId || fromUserId,
-            actionType,
-            status,
-            timestamp: Date.now()
-          }
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create test transaction: " + result.message
-      });
-    }
-  } catch (error) {
-    console.error("Error creating test transaction:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error creating test transaction"
-    });
-  }
-};
-
-/**
- * Create multiple test transactions for demonstration purposes
- */
-export const createBulkTestTransactions = async (req: Request, res: Response) => {
-  try {
-    const { count = 5, productId, fromUserId } = req.body;
-    
-    if (!productId || !fromUserId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required parameters: productId and fromUserId are required"
-      });
-    }
-    
-    // Limit count to a reasonable number
-    const transactionCount = Math.min(Math.max(1, count), 20);
-    
-    // Available action types and roles for variety
-    const actionTypes = [
-      TransactionActionType.CREATE,
-      TransactionActionType.TRANSFER,
-      TransactionActionType.UPDATE,
-      TransactionActionType.VERIFY,
-      TransactionActionType.STOCK_IN,
-      TransactionActionType.STOCK_OUT
-    ];
-    
-    const userRoles = [
-      UserRole.FARMER,
-      UserRole.COLLECTOR,
-      UserRole.TRADER,
-      UserRole.RETAILER,
-      UserRole.CONSUMER
-    ];
-    
-    const results = [];
-    
-    for (let i = 0; i < transactionCount; i++) {
-      // Create some randomness in the transactions
-      const actionType = actionTypes[Math.floor(Math.random() * actionTypes.length)];
-      const fromRole = userRoles[Math.floor(Math.random() * userRoles.length)];
-      const toRole = userRoles[Math.floor(Math.random() * userRoles.length)];
-      const timestamp = Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000); // Random time within last 30 days
-      
-      // Generate a unique ID for this test transaction
-      const testId = `test-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-      
-      // Create details with some randomness
-      const details = {
-        name: `Test Product ${i + 1}`,
-        description: `This is test transaction #${i + 1} created for demonstration`,
-        price: Math.floor(Math.random() * 100000) + 10000,
-        quantity: Math.floor(Math.random() * 10) + 1,
-        testId
-      };
-      
-      // Create different transaction types based on action
-      let result;
-      if (actionType === TransactionActionType.CREATE) {
-        result = await TransactionHistoryService.recordProductCreation(
-          productId,
-          fromUserId,
-          details
-        );
-      } else if (actionType === TransactionActionType.VERIFY) {
-        result = await TransactionHistoryService.recordProductVerification(
-          productId,
-          fromUserId,
-          fromRole,
-          Math.random() > 0.2, // 80% pass rate
-          details
-        );
-      } else if (actionType === TransactionActionType.STOCK_IN || actionType === TransactionActionType.STOCK_OUT) {
-        const quantity = actionType === TransactionActionType.STOCK_IN ? 
-          Math.floor(Math.random() * 20) + 1 : 
-          -Math.floor(Math.random() * 10) - 1;
-        
-        result = await TransactionHistoryService.recordStockChange(
-          productId,
-          fromUserId,
-          fromRole,
-          quantity,
-          actionType,
-          StockChangeReason.ADJUSTMENT,
-          details
-        );
-      } else {
-        // For other types, use transfer as the default
-        result = await TransactionHistoryService.recordProductTransfer(
-          productId,
-          fromUserId,
-          fromRole,
-          req.body.toUserId || fromUserId, // If toUserId not provided, use fromUserId
-          toRole,
-          details
-        );
-      }
-      
-      if (result.success) {
-        results.push({
-          transactionId: result.transactionId,
-          actionType,
-          fromRole,
-          toRole,
-          timestamp
-        });
-      }
-    }
-    
-    return res.status(201).json({
-      success: true,
-      message: `Created ${results.length} test transactions successfully`,
-      data: {
-        transactions: results
-      }
-    });
-  } catch (error) {
-    console.error("Error creating bulk test transactions:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error creating bulk test transactions"
-    });
-  }
-};
 
 /**
  * Get diagnostic statistics about the transaction database

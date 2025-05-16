@@ -7,7 +7,8 @@ import {
   requestPasswordReset, 
   resetPasswordForm, 
   resetPassword,
-  changePassword
+  changePassword,
+  logout
 } from "../../controller/Auth/FormAuthController";
 import validate from "../../middleware/validation";
 import { registerSchema, loginSchema } from "../../validation/userSchema";
@@ -20,6 +21,7 @@ const router = Router();
 // Basic auth routes
 router.post("/register", authRateLimiter, validate(registerSchema), catcher(register));
 router.post("/login", validate(loginSchema), catcher(login));
+router.post("/logout", isAuthenticated, catcher(logout));
 
 // Email verification
 router.post("/send-verification-email", isAuthenticated, catcher(sendVerificationEmail));

@@ -96,8 +96,9 @@ export default function RegisterPage() {
             email: data.email,
             password: data.password,
             callbackUrl: '/',
+            redirect: true,  // Ensure redirect behavior
           });
-        }, 2000);
+        }, 3000); // Increased timeout to 3 seconds
       } else {
         setError(response.message || 'Registration failed. Please try again.');
       }

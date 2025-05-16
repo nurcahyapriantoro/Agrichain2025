@@ -27,14 +27,14 @@ export function HeroSection({ isAuthenticated }: HeroSectionProps) {
       {/* CTA Buttons */}
       <div className="flex flex-col sm:flex-row gap-4 mb-16">
         {isAuthenticated ? (
-          <Link href="/dashboard" passHref>
+          <Link href="/profile" passHref>
             <Button className="px-8 py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-lg">
-              Go to Dashboard <ArrowRightIcon className="ml-2 h-5 w-5" />
+              Go to Profile <ArrowRightIcon className="ml-2 h-5 w-5" />
             </Button>
           </Link>
         ) : (
           <>
-            <Link href="/auth/login" passHref>
+            <Link href="/login" passHref>
               <Button className="px-8 py-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-lg">
                 Get Started <ArrowRightIcon className="ml-2 h-5 w-5" />
               </Button>

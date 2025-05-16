@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import TransactionList from '@/components/transactions/transaction-list';
-import TransactionFilters, { TransactionFilters as Filters } from '@/components/transactions/transaction-filters';
+import { TransactionFilters, TransactionFilters as Filters } from '@/components/transactions/transaction-filters';
 import TransactionCharts from '@/components/transactions/transaction-charts';
 
 // Interface untuk respons API
@@ -32,6 +32,23 @@ interface TransactionListResponse {
     currentPage: number;
     totalItems: number;
   };
+}
+
+// Extended Transaction interface to include blockchain data
+interface ExtendedTransaction extends Transaction {
+  blockchain?: {
+    blockHeight: number;
+    blockHash: string;
+    transactionHash: string;
+    timestamp: number;
+    validator: string;
+  };
+  blockHash?: string;
+  transactionHash?: string;
+  from?: string;
+  to?: string;
+  fromRole?: string;
+  toRole?: string;
 }
 
 // Simplified product statuses
@@ -75,8 +92,9 @@ export default function TransactionsPage() {
 function TransactionsContent() {
   const searchParams = useSearchParams();
   const productIdParam = searchParams.get('productId');
+  const userIdParam = searchParams.get('userId');
   
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<ExtendedTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -85,6 +103,7 @@ function TransactionsContent() {
   const [activeTab, setActiveTab] = useState('list');
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  const [transactionStats, setTransactionStats] = useState<any>(null);
 
   // Create refs for debouncing and cancellation
   const isMountedRef = useRef(true);
@@ -97,10 +116,28 @@ function TransactionsContent() {
       setFilters(prev => ({ ...prev, productId: productIdParam }));
       fetchProductDetails(productIdParam);
     }
-  }, [productIdParam]);
+    
+    if (userIdParam) {
+      setFilters(prev => ({ ...prev, userId: userIdParam }));
+    }
+  }, [productIdParam, userIdParam]);
 
   useEffect(() => {
     fetchTransactions(currentPage, filters);
+    
+    // Fetch transaction stats on initial load for analytics
+    const fetchStats = async () => {
+      try {
+        const stats = await transactionAPI.getTransactionStats();
+        if (stats && stats.data) {
+          setTransactionStats(stats.data);
+        }
+      } catch (err) {
+        console.error('Error fetching transaction stats:', err);
+      }
+    };
+    
+    fetchStats();
   }, [currentPage, filters]);
 
   // Use useCallback to memoize fetch functions
@@ -146,6 +183,8 @@ function TransactionsContent() {
       try {
         if (appliedFilters.productId) {
           response = await transactionAPI.getProductTransactions(appliedFilters.productId, page, 10);
+        } else if (appliedFilters.userId) {
+          response = await transactionAPI.getUserTransactions(appliedFilters.userId, page, 10);
         } else {
           response = await transactionAPI.getTransactions(page, 10, queryParams);
         }
@@ -235,7 +274,24 @@ function TransactionsContent() {
   return (
     <div className="bg-gradient-to-br from-[#18122B] via-[#232526] to-[#0f2027] min-h-screen">
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-white mb-6">Transactions</h1>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-white">Transactions</h1>
+          
+          {product && (
+            <div className="bg-gray-800 px-4 py-2 rounded-md text-white flex items-center mt-2 md:mt-0">
+              <span className="text-gray-400 mr-2">Filtered by product:</span>
+              <span className="font-medium">{product.name}</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="ml-2 text-gray-400 hover:text-white"
+                onClick={handleResetFilters}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
         
         {/* Search bar */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -247,7 +303,7 @@ function TransactionsContent() {
             onChange={(e) => handleFilterChange({ ...filters, search: e.target.value })}
           />
           <Button 
-            onClick={() => setTotalPages(20)} 
+            onClick={handleRefresh}
             className="bg-[#00ffcc] hover:bg-[#00d9ae] text-black font-semibold"
           >
             Search
@@ -303,7 +359,7 @@ function TransactionsContent() {
                   <p>Debug Information:</p>
                   <ul className="list-disc pl-6 mt-2 space-y-1">
                     <li>API URL: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api'}</li>
-                    <li>Endpoint: /transaction-history/latest</li>
+                    <li>Endpoint: {filters.productId ? '/transaction-history/product/' + filters.productId : '/transaction-history/latest'}</li>
                     <li>Network Status: {navigator.onLine ? 'Online' : 'Offline'}</li>
                     <li>Browser: {navigator.userAgent}</li>
                   </ul>
@@ -332,16 +388,11 @@ function TransactionsContent() {
                     className="bg-[#a259ff] hover:bg-[#8a4ad9] text-white mb-6" 
                     onClick={() => {
                       // Create sample transactions
-                      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api'}/transaction-history/create-bulk-test`, {
-                        method: 'POST',
+                      fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api'}/transaction-history/latest`, {
+                        method: 'GET',
                         headers: {
                           'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                          count: 10,
-                          productId: 'test-product-123',
-                          fromUserId: 'test-user-456'
-                        })
+                        }
                       })
                       .then(response => {
                         if (response.ok) {
@@ -349,11 +400,11 @@ function TransactionsContent() {
                         }
                       })
                       .catch(err => {
-                        console.error('Error creating test transactions:', err);
+                        console.error('Error fetching transactions:', err);
                       });
                     }}
                   >
-                    Create New Test Transactions
+                    Retry Loading Transactions
                   </Button>
                   
                   <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden mt-4">
@@ -418,7 +469,7 @@ function TransactionsContent() {
           </TabsContent>
           
           <TabsContent value="analytics" className="border-none p-0">
-            <TransactionCharts transactions={transactions || []} />
+            <TransactionCharts transactions={transactions || []} stats={transactionStats} />
           </TabsContent>
         </Tabs>
       </div>

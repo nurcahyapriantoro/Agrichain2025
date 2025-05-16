@@ -9,7 +9,6 @@ import ProductRoute from "./ProductRoute"
 import ProductSearchRoute from "./ProductSearchRoute"
 import TransactionHistoryRoute from "./TransactionHistoryRoute"
 import NotificationRoute from "./NotificationRoute"
-import StockRoute from "./StockRoute"
 import FormAuthRoute from "./Auth/FormAuthRoute";
 import GoogleAuthRoute from "./Auth/GoogleAuthRoute";
 import Web3AuthRoute from "./Auth/Web3AuthRoute";
@@ -32,7 +31,6 @@ router.use("/product", ProductRoute)
 router.use("/product-search", ProductSearchRoute)
 router.use("/transaction-history", TransactionHistoryRoute)
 router.use("/notifications", NotificationRoute)
-router.use("/stock", StockRoute)
 router.use("/auth/form", FormAuthRoute);
 router.use("/auth/google", GoogleAuthRoute);
 router.use("/auth/web3", Web3AuthRoute);

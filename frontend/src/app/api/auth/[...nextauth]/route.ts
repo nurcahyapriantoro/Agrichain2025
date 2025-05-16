@@ -36,7 +36,7 @@ export const authOptions: NextAuthOptions = {
           console.log(`Authenticating: ${credentials.email}`);
           
           // Panggilan API login
-          const apiResponse = await fetch(`${API_URL}/user/login`, {
+          const apiResponse = await fetch(`${API_URL}/auth/form/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -47,12 +47,16 @@ export const authOptions: NextAuthOptions = {
           
           const data = await apiResponse.json();
           console.log('API Response:', JSON.stringify(data, null, 2));
+          console.log('API Response Status:', apiResponse.status);
           
           // Jika login berhasil
           if (data.success === true) {
             // Ambil data user dari respons API
             const userData = data.data?.user || data.user || data.data;
             const tokenValue = data.data?.token || data.token || '';
+            
+            console.log('User data extracted:', userData ? 'User data present' : 'User data missing');
+            console.log('Token extracted:', tokenValue ? 'Token present' : 'Token missing');
             
             if (!userData || !userData.id) {
               console.error('Invalid user data in API response');
@@ -211,7 +215,7 @@ export const authOptions: NextAuthOptions = {
     maxAge: 24 * 60 * 60 // 24 hours
   },
   debug: true, // Aktifkan debug mode di development
-  secret: process.env.NEXTAUTH_SECRET || 'your-secret-key',
+  secret: process.env.NEXTAUTH_SECRET || 'a-very-long-and-secure-secret-key-for-jwt-encryption-65fc4c6af7a18',
   cookies: {
     sessionToken: {
       name: `next-auth.session-token`,

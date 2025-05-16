@@ -21,11 +21,18 @@ export interface PrivateKeyResponse {
   };
 }
 
+// Add type for API responses
+export interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data?: T;
+}
+
 /**
  * Authenticate user with email and password
  */
 export const login = async (email: string, password: string): Promise<LoginResponse> => {
-  return apiPost<LoginResponse>('/auth/login', { email, password });
+  return apiPost<LoginResponse>('/auth/form/login', { email, password });
 };
 
 /**
@@ -39,7 +46,7 @@ export const register = async (userData: {
   phone?: string;
   address?: string;
 }): Promise<RegisterResponse> => {
-  return apiPost<RegisterResponse>('/auth/register', userData);
+  return apiPost<RegisterResponse>('/auth/form/register', userData);
 };
 
 /**
@@ -67,28 +74,28 @@ export const getCurrentUser = async (): Promise<User> => {
  * Verify email with token
  */
 export const verifyEmail = async (token: string): Promise<{ success: boolean }> => {
-  return apiGet<{ success: boolean }>(`/auth/verify-email?token=${token}`);
+  return apiGet<{ success: boolean }>(`/auth/form/verify-email:token=${token}`);
 };
 
 /**
  * Request password reset
  */
 export const requestPasswordReset = async (email: string): Promise<{ success: boolean }> => {
-  return apiPost<{ success: boolean }>('/auth/forgot-password', { email });
+  return apiPost<{ success: boolean }>('/auth/form/forgot-password', { email });
 };
 
 /**
  * Reset password with token
  */
 export const resetPassword = async (token: string, newPassword: string): Promise<{ success: boolean }> => {
-  return apiPost<{ success: boolean }>('/auth/reset-password', { token, newPassword });
+  return apiPost<{ success: boolean }>('/auth/form/reset-password', { token, newPassword });
 };
 
 /**
  * Change password (authenticated)
  */
 export const changePassword = async (currentPassword: string, newPassword: string): Promise<{ success: boolean }> => {
-  return apiPost<{ success: boolean }>('/auth/change-password', { currentPassword, newPassword });
+  return apiPost<{ success: boolean }>('/auth/form/change-password', { currentPassword, newPassword });
 };
 
 /**
@@ -103,4 +110,19 @@ export const logout = async (): Promise<{ success: boolean }> => {
  */
 export const getPrivateKey = async (password: string): Promise<PrivateKeyResponse> => {
   return apiPost<PrivateKeyResponse>('/user/private-key', { password });
+};
+
+/**
+ * Update user email address
+ */
+export const updateEmail = async (email: string): Promise<ApiResponse<{ user: User }>> => {
+  return apiPost<ApiResponse<{ user: User }>>('/user/update-email', { email });
+};
+
+/**
+ * Setup password for wallet users
+ * This is used when wallet users want to set up a password for the first time
+ */
+export const setupWalletPassword = async (password: string): Promise<ApiResponse<{ success: boolean }>> => {
+  return apiPost<ApiResponse<{ success: boolean }>>('/user/setup-wallet-password', { password });
 }; 

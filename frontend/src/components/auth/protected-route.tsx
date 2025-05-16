@@ -37,11 +37,27 @@ export function ProtectedRoute({
         nextAuth: status, 
         walletAuth: hasWalletAuth,
         connectedWallet: hasConnectedWallet,
-        session: session ? 'exists' : 'none'
+        session: session ? 'exists' : 'none',
+        walletToken: walletToken ? 'exists' : 'none',
+        walletUserData: walletUserData ? 'exists' : 'none',
+        walletAddress: walletAddress ? 'exists' : 'none'
       });
 
-      // Log user data for verification
-      console.log('Data pengguna tersimpan:', localStorage.getItem('walletUserData'));
+      // Fix untuk data autentikasi wallet yang tidak lengkap
+      if (walletToken && !walletUserData) {
+        console.warn('ProtectedRoute: Token exists but user data is missing');
+        // Jika hanya ada token tetapi tidak ada userData, coba simpan minimal userData
+        try {
+          const userData = { 
+            role: UserRole.FARMER, // Default role
+            walletAddress: walletAddress || 'unknown'
+          };
+          localStorage.setItem('walletUserData', JSON.stringify(userData));
+          console.log('ProtectedRoute: Created basic userData', userData);
+        } catch (error) {
+          console.error('Error creating basic userData:', error);
+        }
+      }
 
       // If using NextAuth session
       if (status === 'authenticated' && session) {
@@ -79,7 +95,17 @@ export function ProtectedRoute({
         try {
           const userData = JSON.parse(walletUserData || '{}');
           userRole = userData.role;
+          console.log('ProtectedRoute: Got userRole from wallet:', userRole);
           needsRoleSelection = false;
+          
+          // Jika userRole tidak valid, coba tetapkan nilai default
+          if (!userRole || typeof userRole !== 'string' || !Object.values(UserRole).includes(userRole as UserRole)) {
+            console.warn('ProtectedRoute: Invalid role from wallet, using FARMER as default');
+            userRole = UserRole.FARMER;
+            // Update localStorage with valid role
+            userData.role = UserRole.FARMER;
+            localStorage.setItem('walletUserData', JSON.stringify(userData));
+          }
         } catch (e) {
           console.error('Error parsing wallet user data:', e);
         }
@@ -130,6 +156,16 @@ export function ProtectedRoute({
   }
 
   if (status === 'unauthenticated') {
+    // Check if wallet auth is present before returning null
+    const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
+    const walletUserData = localStorage.getItem('walletUserData');
+    
+    if (walletToken && walletUserData) {
+      console.log('ProtectedRoute: NextAuth shows unauthenticated but wallet auth exists');
+      // Return children since wallet auth is valid
+      return <>{children}</>;
+    }
+    
     return null;
   }
 

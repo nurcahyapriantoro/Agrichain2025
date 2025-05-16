@@ -1,5 +1,4 @@
 import { Router } from "express"
-import { Request, Response } from "express"
 
 import catcher from "../helper/handler"
 import {
@@ -11,8 +10,6 @@ import {
   getProfileInfo,
 } from "../controller/UserController"
 import { authenticateJWT } from "../../middleware/auth"
-import validate from "../middleware/validation"
-import { authRateLimiter } from "../../middleware/rateLimiter"
 
 const router = Router()
 

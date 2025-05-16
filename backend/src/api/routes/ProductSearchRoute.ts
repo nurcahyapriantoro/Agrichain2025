@@ -8,126 +8,6 @@ import cacheManager from "../../utils/cacheManager";
 
 const router = express.Router();
 
-/**
- * @swagger
- * /product/search:
- *   get:
- *     summary: Search for products with advanced filtering and pagination
- *     tags: [Products]
- *     parameters:
- *       - in: query
- *         name: query
- *         schema:
- *           type: string
- *         description: Search term for product name and description
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: Filter by product category
- *       - in: query
- *         name: minPrice
- *         schema:
- *           type: number
- *         description: Minimum price filter
- *       - in: query
- *         name: maxPrice
- *         schema:
- *           type: number
- *         description: Maximum price filter
- *       - in: query
- *         name: location
- *         schema:
- *           type: string
- *         description: Filter by location
- *       - in: query
- *         name: harvestDateFrom
- *         schema:
- *           type: string
- *           format: date
- *         description: Filter by harvest date (from)
- *       - in: query
- *         name: harvestDateTo
- *         schema:
- *           type: string
- *           format: date
- *         description: Filter by harvest date (to)
- *       - in: query
- *         name: certifications
- *         schema:
- *           type: array
- *           items:
- *             type: string
- *         description: Filter by certifications
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *         description: Filter by product status
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *           default: 1
- *         description: Page number for pagination
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 100
- *           default: 10
- *         description: Number of items per page
- *       - in: query
- *         name: sortBy
- *         schema:
- *           type: string
- *           enum: [name, price, createdAt, updatedAt]
- *           default: createdAt
- *         description: Field to sort results by
- *       - in: query
- *         name: sortDirection
- *         schema:
- *           type: string
- *           enum: [asc, desc]
- *           default: desc
- *         description: Sort direction
- *     responses:
- *       200:
- *         description: Successful search
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     products:
- *                       type: array
- *                       items:
- *                         type: object
- *                     pagination:
- *                       type: object
- *                       properties:
- *                         total:
- *                           type: integer
- *                         page:
- *                           type: integer
- *                         limit:
- *                           type: integer
- *                         totalPages:
- *                           type: integer
- *                         hasNext:
- *                           type: boolean
- *                         hasPrev:
- *                           type: boolean
- *       400:
- *         description: Invalid search parameters
- */
 router.get("/search", async (req: Request, res: Response) => {
   try {
     // Extract search and pagination parameters
@@ -175,39 +55,6 @@ router.get("/search", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /product/popular:
- *   get:
- *     summary: Get most popular products based on analytics
- *     tags: [Products]
- *     parameters:
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 50
- *           default: 10
- *         description: Number of products to return
- *     responses:
- *       200:
- *         description: Successful operation
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   type: object
- *                   properties:
- *                     products:
- *                       type: array
- *                       items:
- *                         type: object
- */
 router.get("/popular", async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
@@ -257,29 +104,6 @@ router.get("/popular", async (req: Request, res: Response) => {
   }
 });
 
-/**
- * @swagger
- * /product/{productId}/stats:
- *   get:
- *     summary: Get analytics statistics for a product
- *     tags: [Products]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: productId
- *         schema:
- *           type: string
- *         required: true
- *         description: ID of the product
- *     responses:
- *       200:
- *         description: Product analytics
- *       403:
- *         description: Unauthorized - only product owner can view analytics
- *       404:
- *         description: Product not found
- */
 router.get("/:productId/stats", authenticateJWT, async (req: Request, res: Response) => {
   try {
     const { productId } = req.params;

@@ -5,8 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import React from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { transactionAPI, productAPI } from '@/lib/api';
-import apiClient from '@/lib/api';
-import { Transaction } from '@/lib/types';
+import { apiClient } from '@/lib/api/client';
+import { Transaction, Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -26,13 +26,50 @@ import {
   BanknotesIcon
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
+// Import the ExtendedTransaction from the transactions API client
+import { ExtendedTransaction } from '@/lib/api/transactions';
+
+// Define an interface for blockchain data
+interface BlockchainData {
+  blockHeight: number;
+  blockHash: string;
+  transactionHash: string;
+  timestamp: number;
+  validator: string;
+}
+
+// Define API response interface
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+// Extend Transaction type to include response structure
+interface TransactionWithData extends Transaction {
+  data?: any;
+  blockchain?: BlockchainData;
+  transactionHash?: string;
+  blockHash?: string;
+  from?: string;
+  to?: string;
+  fromRole?: string;
+  toRole?: string;
+  fromUserId?: string;
+  toUserId?: string;
+}
+
+// Extend Product type to include response structure
+interface ProductWithData extends Product {
+  data?: any;
+}
 
 export default function TransactionDetailPage() {
   const params = useParams();
   const transactionId = Array.isArray(params.id) ? params.id[0] : params.id as string;
   const router = useRouter();
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const [productDetails, setProductDetails] = useState<any | null>(null);
+  const [transaction, setTransaction] = useState<TransactionWithData | null>(null);
+  const [productDetails, setProductDetails] = useState<ProductWithData | null>(null);
   const [senderDetails, setSenderDetails] = useState<any | null>(null);
   const [recipientDetails, setRecipientDetails] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,12 +89,44 @@ export default function TransactionDetailPage() {
       console.log(`Attempting to fetch transaction with ID: ${id}`);
       
       try {
-        // Try the transaction history endpoint first
+        // Try the transaction history endpoint
         const response = await transactionAPI.getTransactionById(id);
         
-        if (response.data && response.data.data) {
-          console.log('Transaction data received:', response.data);
-          const txData = response.data.data;
+        if (response) {
+          console.log('Transaction data received:', response);
+          // Format the transaction data to match our expected format
+          const txData: TransactionWithData = {
+            id: response.id || id,
+            transactionId: response.id || id,
+            fromUser: response.fromUser || response.from || response.fromUserId || '',
+            toUser: response.toUser || response.to || response.toUserId || '',
+            productId: response.productId || '',
+            timestamp: response.timestamp || Date.now(),
+            status: response.status || 'success',
+            actionType: response.type || response.actionType || 'TRANSFER',
+            // Add fields from the ExtendedTransaction interface
+            blockchain: response.blockchain || {
+              blockHeight: 0,
+              blockHash: response.blockHash || '',
+              transactionHash: response.transactionHash || response.id || id,
+              timestamp: response.timestamp || Date.now(),
+              validator: 'agrichain-node-1'
+            },
+            blockHash: response.blockHash || response.blockchain?.blockHash,
+            transactionHash: response.transactionHash || response.blockchain?.transactionHash || response.id,
+            from: response.from || response.fromUserId || response.fromUser,
+            to: response.to || response.toUserId || response.toUser,
+            fromRole: response.fromRole || '',
+            toRole: response.toRole || '',
+            fromUserId: response.fromUserId || response.from || response.fromUser,
+            toUserId: response.toUserId || response.to || response.toUser,
+            // Include any other fields we need
+            quantity: response.quantity || 0,
+            price: response.price || 0,
+            unit: response.unit || '',
+            metadata: response.metadata || {}
+          };
+          
           setTransaction(txData);
           
           // Fetch additional data
@@ -72,7 +141,7 @@ export default function TransactionDetailPage() {
       // If transaction history endpoint fails, try direct transaction endpoint as fallback
       try {
         console.log('Trying fallback endpoint for transaction');
-        const fallbackResponse = await apiClient.get(`/transaction/${id}`);
+        const fallbackResponse = await apiClient.get(`/transaction-history/transaction/${id}`);
         
         if (fallbackResponse.data && (fallbackResponse.data.data || fallbackResponse.data.metadata)) {
           console.log('Fallback transaction data received:', fallbackResponse.data);
@@ -96,24 +165,9 @@ export default function TransactionDetailPage() {
         console.warn('Fallback transaction endpoint failed:', fallbackError);
       }
       
-      // If all API calls failed, create mock data based on URL parameter
-      // This is a temporary solution for UI testing
-      console.log('Creating mock transaction data for UI testing');
-      const mockTransaction = {
-        id: id,
-        transactionId: id,
-        productId: id.includes('prod-') ? id : 'prod-' + id.substring(0, 10),
-        fromUser: 'unknown-sender',
-        toUser: 'unknown-recipient',
-        timestamp: Date.now(),
-        status: 'success',
-        actionType: 'TRANSFER',
-        quantity: 1,
-        price: 0
-      };
-      
-      setTransaction(mockTransaction);
-      await fetchRelatedData(mockTransaction);
+      // If all API calls failed, show error message
+      console.error('All transaction API endpoints failed');
+      setError('Transaction data could not be retrieved. Please try again later.');
       
     } catch (error: any) {
       console.error('Error fetching transaction:', error);
@@ -129,8 +183,8 @@ export default function TransactionDetailPage() {
     if (txData.productId) {
       try {
         const productResponse = await productAPI.getProductById(txData.productId);
-        if (productResponse.data && productResponse.data.data) {
-          setProductDetails(productResponse.data.data);
+        if (productResponse && 'data' in productResponse) {
+          setProductDetails(productResponse.data as ProductWithData);
         }
       } catch (err) {
         console.warn('Could not fetch product details:', err);
@@ -138,9 +192,9 @@ export default function TransactionDetailPage() {
     }
 
     // If there's a sender ID (fromUser), fetch sender details
-    if (txData.fromUser || txData.senderId || txData.from) {
+    if (txData.fromUser || txData.from || txData.senderId || txData.fromUserId) {
       try {
-        const userId = txData.fromUser || txData.senderId || txData.from;
+        const userId = txData.fromUser || txData.from || txData.senderId || txData.fromUserId;
         const userResponse = await fetch(`/api/users/${userId}`);
         if (userResponse.ok) {
           const userData = await userResponse.json();
@@ -152,9 +206,9 @@ export default function TransactionDetailPage() {
     }
 
     // If there's a recipient ID (toUser), fetch recipient details
-    if (txData.toUser || txData.recipientId || txData.to) {
+    if (txData.toUser || txData.to || txData.recipientId || txData.toUserId) {
       try {
-        const userId = txData.toUser || txData.recipientId || txData.to;
+        const userId = txData.toUser || txData.to || txData.recipientId || txData.toUserId;
         const userResponse = await fetch(`/api/users/${userId}`);
         if (userResponse.ok) {
           const userData = await userResponse.json();
@@ -614,10 +668,10 @@ export default function TransactionDetailPage() {
                               <time className="mb-1 text-sm font-normal leading-none text-gray-400 dark:text-gray-500">Blockchain Record</time>
                               <h3 className="text-base font-semibold text-gray-900 dark:text-white">Added to Blockchain</h3>
                               <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
-                                {transaction.blockchain.timestamp ? formatDate(transaction.blockchain.timestamp) : 'Timestamp not available'}
+                                {transaction.blockchain?.timestamp ? formatDate(transaction.blockchain.timestamp) : "Not available"}
                               </p>
-                              {transaction.blockchain.validator && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Validated by: {transaction.blockchain.validator}</p>
+                              {transaction.blockchain?.validator && (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Validated by: {transaction.blockchain?.validator}</p>
                               )}
                             </motion.li>
                           )}
@@ -642,9 +696,9 @@ export default function TransactionDetailPage() {
                           <div className="sm:col-span-2">
                             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Transaction Hash</dt>
                             <dd className="mt-1 text-base text-gray-900 dark:text-white flex items-center">
-                              <span className="font-mono text-sm break-all mr-2">{transaction.blockchain.transactionHash || 'Not available'}</span>
-                              {transaction.blockchain.transactionHash && (
-                                <button onClick={() => copyToClipboard(transaction.blockchain.transactionHash || '')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                              <span className="font-mono text-sm break-all mr-2">{transaction.blockchain?.transactionHash || 'Not available'}</span>
+                              {transaction.blockchain?.transactionHash && (
+                                <button onClick={() => copyToClipboard(transaction.blockchain?.transactionHash || '')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                                   <DocumentDuplicateIcon className="h-4 w-4" />
                                 </button>
                               )}
@@ -653,16 +707,15 @@ export default function TransactionDetailPage() {
                           <div className="sm:col-span-2">
                             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Block Hash</dt>
                             <dd className="mt-1 text-base text-gray-900 dark:text-white flex items-center">
-                              <span className="font-mono text-sm break-all mr-2">{transaction.blockchain.blockHash || 'Not available'}</span>
-                              {transaction.blockchain.blockHash && (
-                                <button onClick={() => copyToClipboard(transaction.blockchain.blockHash || '')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                              <span className="font-mono text-sm break-all mr-2">{transaction.blockchain?.blockHash || 'Not available'}</span>
+                              {transaction.blockchain?.blockHash && (
+                                <button onClick={() => copyToClipboard(transaction.blockchain?.blockHash || '')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                                   <DocumentDuplicateIcon className="h-4 w-4" />
                                 </button>
                               )}
                             </dd>
                           </div>
-                          {/* Optional block height field */}
-                          {transaction.blockchain && 'blockHeight' in transaction.blockchain && transaction.blockchain.blockHeight && (
+                          {transaction.blockchain?.blockHeight && (
                             <div>
                               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Block Height</dt>
                               <dd className="mt-1 text-base text-gray-900 dark:text-white">
@@ -670,11 +723,18 @@ export default function TransactionDetailPage() {
                               </dd>
                             </div>
                           )}
-                          {transaction.blockchain && transaction.blockchain.timestamp && (
+                          {transaction.blockchain?.timestamp ? (
                             <div>
                               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Block Timestamp</dt>
                               <dd className="mt-1 text-base text-gray-900 dark:text-white">
                                 {formatDate(transaction.blockchain.timestamp)}
+                              </dd>
+                            </div>
+                          ) : (
+                            <div>
+                              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Block Timestamp</dt>
+                              <dd className="mt-1 text-base text-gray-900 dark:text-white">
+                                Not available
                               </dd>
                             </div>
                           )}
@@ -732,6 +792,52 @@ export default function TransactionDetailPage() {
                       Refresh Data
                     </Button>
                   </div>
+
+                  {/* Blockchain Verification */}
+                  {transaction && (
+                    <div className="mt-6 space-y-4 border-t pt-4 dark:border-gray-700">
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                        <ShieldCheckIcon className="h-5 w-5 mr-2 text-green-600" />
+                        Blockchain Verification
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Block Height</div>
+                          <div className="mt-1 font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                            {transaction?.blockchain?.blockHeight?.toLocaleString() || "Not available"}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Block Hash</div>
+                          <div className="mt-1 font-mono text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">
+                            {transaction?.blockchain?.blockHash || "Not available"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Transaction Hash</div>
+                        <div className="mt-1 font-mono text-sm bg-gray-100 dark:bg-gray-800 p-2 rounded overflow-x-auto">
+                          {transaction?.blockchain?.transactionHash || transaction?.transactionHash || transaction?.id || "Not available"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Timestamp</div>
+                        <div className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                          {transaction?.blockchain?.timestamp ? formatDate(transaction.blockchain.timestamp) : "Not available"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Validator</div>
+                        <div className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                          {transaction?.blockchain?.validator || "Not available"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
