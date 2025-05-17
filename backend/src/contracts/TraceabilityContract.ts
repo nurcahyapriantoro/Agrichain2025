@@ -334,7 +334,7 @@ export class TraceabilityContract extends SmartContract {
       action: TraceAction.PRODUCED,
       actor: {
         userId: owner,
-        role: UserRole.PRODUCER
+        role: UserRole.FARMER
       },
       metadata
     };

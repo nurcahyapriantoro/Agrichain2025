@@ -1,0 +1,253 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useUser } from '@/contexts/user/UserContext';
+import { getProductsByOwner } from '@/lib/api/products';
+import { Product, ProductStatus } from '@/types/product';
+import { Button } from '@/components/ui/button';
+import { Loader2, ArrowUpRight, Info } from 'lucide-react';
+import Link from 'next/link';
+import { UserRole } from '@/types/user';
+import TransferProductModal from './TransferProductModal';
+import { formatRupiah } from '@/lib/utils';
+
+// Define allowed transfer flows based on user roles
+const TRANSFER_FLOW = {
+  [UserRole.FARMER]: [UserRole.COLLECTOR],
+  [UserRole.COLLECTOR]: [UserRole.TRADER],
+  [UserRole.TRADER]: [UserRole.RETAILER],
+  [UserRole.RETAILER]: [],
+  [UserRole.CONSUMER]: [],
+};
+
+// Utility function to get status badge styling
+const getStatusBadgeClass = (status: string | undefined) => {
+  if (!status) {
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  }
+  
+  switch (status.toUpperCase()) {
+    case ProductStatus.CREATED:
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-100';
+    case ProductStatus.TRANSFERRED:
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-800 dark:text-purple-100';
+    case ProductStatus.VERIFIED:
+      return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100';
+    case ProductStatus.RECEIVED:
+      return 'bg-teal-100 text-teal-800 dark:bg-teal-800 dark:text-teal-100';
+    default:
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  }
+};
+
+// Web3 background animation component
+function Web3Background() {
+  return (
+    <div className="fixed inset-0 -z-10 bg-gradient-to-br from-[#18122B] via-[#232526] to-[#0f2027] animate-gradient-move overflow-hidden">
+      {/* Animated particles */}
+      <div className="absolute inset-0 pointer-events-none">
+        {[...Array(30)].map((_, i) => (
+          <div
+            key={`particle-${i}`}
+            className="absolute rounded-full opacity-20 animate-float"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              width: `${Math.random() * 8 + 4}px`,
+              height: `${Math.random() * 8 + 4}px`,
+              background: `linear-gradient(135deg, #a259ff, #00ffcc, #00bfff)`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${Math.random() * 10 + 10}s`
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function MyProductsPage() {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const { userData } = useUser();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+  // Effect to fetch user's products
+  useEffect(() => {
+    const fetchUserProducts = async () => {
+      if (session?.user?.id) {
+        try {
+          setIsLoading(true);
+          setError(null);
+          const response = await getProductsByOwner(session.user.id);
+          
+          if (response && response.products) {
+            setProducts(response.products);
+          } else {
+            setProducts([]);
+          }
+        } catch (err) {
+          console.error('Error fetching products:', err);
+          setError('Failed to load your products. Please try again.');
+          setProducts([]);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchUserProducts();
+  }, [session?.user?.id]);
+
+  // Function to open transfer modal for a product
+  const handleTransferClick = (product: Product) => {
+    setSelectedProduct(product);
+    setIsTransferModalOpen(true);
+  };
+
+  // Function to close the transfer modal
+  const handleCloseTransferModal = () => {
+    setSelectedProduct(null);
+    setIsTransferModalOpen(false);
+  };
+
+  // Function to handle successful transfer
+  const handleTransferSuccess = () => {
+    // Refresh products after successful transfer
+    if (session?.user?.id) {
+      getProductsByOwner(session.user.id)
+        .then(response => {
+          if (response && response.products) {
+            setProducts(response.products);
+          }
+        })
+        .catch(err => {
+          console.error('Error refreshing products:', err);
+        });
+    }
+    handleCloseTransferModal();
+  };
+
+  // Determine if user can transfer products based on their role
+  const userRole = userData?.role || session?.user?.role as UserRole;
+  const canTransfer = userRole && TRANSFER_FLOW[userRole] && TRANSFER_FLOW[userRole].length > 0;
+
+  return (
+    <div className="min-h-screen pb-20">
+      <Web3Background />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+        <header className="mb-10">
+          <h1 className="text-4xl font-bold font-orbitron bg-gradient-to-r from-[#a259ff] via-[#00ffcc] to-[#00bfff] bg-clip-text text-transparent drop-shadow-[0_0_20px_#00ffcc] animate-glow">
+            My Products
+          </h1>
+          <p className="text-gray-300 mt-2 font-space">
+            Manage and transfer your products in the supply chain
+          </p>
+        </header>
+
+        {error && (
+          <div className="bg-red-900/30 border-l-4 border-red-500 p-4 mb-6 rounded-lg">
+            <p className="text-red-200">{error}</p>
+          </div>
+        )}
+
+        {!canTransfer && userRole && (
+          <div className="bg-yellow-900/30 border-l-4 border-yellow-500 p-4 mb-6 rounded-lg">
+            <div className="flex">
+              <Info className="h-5 w-5 text-yellow-500 mr-2" />
+              <p className="text-yellow-200">
+                {userRole === UserRole.RETAILER 
+                  ? "As a Retailer, you can sell products to consumers but cannot transfer to other roles."
+                  : "Your role doesn't support transferring products in the supply chain."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-10 w-10 text-[#a259ff] animate-spin" />
+          </div>
+        ) : products.length === 0 ? (
+          <div className="bg-slate-800/40 rounded-xl p-10 text-center">
+            <h3 className="text-xl text-gray-300 font-space mb-6">You don't have any products yet</h3>
+            {userRole === UserRole.FARMER && (
+              <Link href="/products/new">
+                <Button className="bg-gradient-to-r from-[#a259ff] to-[#00ffcc] hover:opacity-90 text-black font-bold">
+                  Create New Product
+                </Button>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {products.map((product, index) => (
+              <div 
+                key={product.id} 
+                className="bg-gradient-to-br from-[#232526cc] to-[#18122Bcc] border border-[#a259ff40] hover:border-[#a259ff] rounded-xl overflow-hidden transition-all duration-300 transform hover:scale-[1.02] hover:shadow-[0_0_30px_#a259ff33] group"
+              >
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-xl font-semibold text-white truncate font-orbitron group-hover:text-[#a259ff] transition-colors">
+                      {product.name}
+                    </h3>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(product.status)}`}>
+                      {product.status}
+                    </span>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <p className="text-gray-400 text-sm mb-1">ID: {product.id}</p>
+                    <p className="text-gray-400 text-sm mb-1 truncate">Description: {product.description || 'No description'}</p>
+                    <p className="text-gray-300 font-semibold mb-1">
+                      Quantity: {product.quantity} {product.unit || 'units'}
+                    </p>
+                    <p className="text-[#00ffcc] font-bold">
+                      Price: {formatRupiah(product.price)}
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-6">
+                    <Link href={`/products/${product.id}`}>
+                      <Button variant="outline" className="border-[#a259ff] text-[#a259ff] hover:bg-[#a259ff20]">
+                        <Info className="mr-2 h-4 w-4" />
+                        Details
+                      </Button>
+                    </Link>
+                    
+                    {canTransfer && product.status !== ProductStatus.TRANSFERRED && (
+                      <Button
+                        onClick={() => handleTransferClick(product)}
+                        className="bg-gradient-to-r from-[#a259ff] to-[#00ffcc] text-black font-bold hover:opacity-90"
+                      >
+                        <ArrowUpRight className="mr-2 h-4 w-4" />
+                        Transfer
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Transfer Modal */}
+      {isTransferModalOpen && selectedProduct && (
+        <TransferProductModal
+          product={selectedProduct}
+          onClose={handleCloseTransferModal}
+          onSuccess={handleTransferSuccess}
+          userRole={userRole as UserRole}
+        />
+      )}
+    </div>
+  );
+} 

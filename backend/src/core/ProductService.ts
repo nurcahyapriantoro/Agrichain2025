@@ -1,11 +1,10 @@
 import { UserRole } from "../enum";
 import OwnershipTransfer from "./OwnershipTransfer";
 import RoleService from "./RoleService";
-import { TransactionHistoryService } from "./TransactionHistory";
 import { txhashDB } from "../helper/level.db.client";
 import { ProductStatus } from "../enum";
-import { ContractRegistry } from "../contracts/ContractRegistry";
 import BlockchainIntegration from "./BlockchainIntegration";
+import { TransactionHistoryService } from "./TransactionHistory";
 
 // Update the interface for blockchain integration return type to include blockHeight
 interface BlockchainResult {

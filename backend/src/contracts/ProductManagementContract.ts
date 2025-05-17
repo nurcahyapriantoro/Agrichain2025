@@ -164,13 +164,6 @@ export class ProductManagementContract extends SmartContract {
           sender,
           params.details
         );
-      case 'recallProduct':
-        return this.recallProduct(
-          params.productId,
-          params.reason,
-          sender,
-          params.details
-        );
       case 'verifyProduct':
         return this.verifyProduct(
           params.productId,

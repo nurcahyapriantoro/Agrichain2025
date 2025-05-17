@@ -6,13 +6,14 @@ import Link from 'next/link';
 import { transactionAPI } from '@/lib/api';
 import { Transaction } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { ExtendedTransaction, TransactionListResponse } from '@/lib/api/transactions';
 
 export default function ProductTransactionHistoryPage() {
   const params = useParams();
   const router = useRouter();
   const productId = params.id as string;
   
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<ExtendedTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [productName, setProductName] = useState<string>('Product');
@@ -29,24 +30,13 @@ export default function ProductTransactionHistoryPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await transactionAPI.getProductTransactions(id, page, 10);
+      const response: TransactionListResponse = await transactionAPI.getProductTransactions(id, page, 10);
       
-      if (response.data) {
-        let transactionsData = [];
-        let totalPagesCount = 1;
+      if (response) {
+        const transactionsData = response.data || [];
+        const totalPagesCount = response.totalPages || 1;
         
-        if (response.data.data) {
-          transactionsData = response.data.data;
-          totalPagesCount = response.data.totalPages || 1;
-        } else if (Array.isArray(response.data)) {
-          transactionsData = response.data;
-          totalPagesCount = Math.ceil(response.data.length / 10) || 1;
-        } else if (response.data.transactions) {
-          transactionsData = response.data.transactions;
-          totalPagesCount = response.data.pagination?.totalPages || 1;
-        }
-        
-        if (Array.isArray(transactionsData) && transactionsData.length > 0) {
+        if (transactionsData.length > 0) {
           // Try to get the product name from the first transaction
           if (transactionsData[0]?.productName || transactionsData[0]?.product?.name) {
             setProductName(transactionsData[0]?.productName || transactionsData[0]?.product?.name || 'Product');
@@ -191,10 +181,10 @@ export default function ProductTransactionHistoryPage() {
                       </div>
                       <div className="flex-shrink-0 ml-2 flex flex-col items-end">
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          From: {truncateAddress(transaction.fromUser || transaction.sender || '')}
+                          From: {truncateAddress(transaction.fromUser || transaction.from || transaction.sender || '')}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          To: {truncateAddress(transaction.toUser || transaction.recipient || '')}
+                          To: {truncateAddress(transaction.toUser || transaction.to || transaction.recipient || '')}
                         </p>
                       </div>
                     </div>

@@ -2,7 +2,6 @@ import { ContractRegistry } from '../contracts/ContractRegistry';
 import { ProductManagementContract } from '../contracts/ProductManagementContract';
 import { TransactionHistoryContract } from '../contracts/TransactionHistoryContract';
 import { OwnershipTransferContract } from '../contracts/OwnershipTransferContract';
-import { StockManagementContract } from '../contracts/StockManagementContract';
 import { txhashDB } from "../helper/level.db.client";
 
 /**
@@ -27,7 +26,6 @@ class ContractRegistryService {
         new ProductManagementContract(txhashDB),
         new TransactionHistoryContract(txhashDB),
         new OwnershipTransferContract(txhashDB),
-        new StockManagementContract(txhashDB)
       ];
 
       // Deploy each contract

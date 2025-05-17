@@ -1,7 +1,6 @@
 import type { Request, Response } from "express";
-import bcrypt from "bcrypt";
 import { generateToken } from "../../../utils/jwtHelper";
-import { encryptPrivateKey } from "../../../utils/encryption";
+import { encryptPrivateKey, hashPassword, verifyPassword, decryptPrivateKey } from "../../../utils/encryption";
 import { 
   User, 
   saveUserToDb, 
@@ -30,9 +29,16 @@ const register = async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: "Email already in use" });
   }
   const userId = generateUserId(role);
+  
+  // Generate a unique key pair for this user
   const { privateKey, publicKey } = generateKeyPair();
+  
+  // Encrypt the private key with the user's password
   const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
-  const hashedPassword = await bcrypt.hash(password, 10);
+  
+  // Hash the password for secure storage
+  const hashedPassword = hashPassword(password);
+  
   const newUser: User = {
     id: userId,
     email,
@@ -74,9 +80,16 @@ const register = async (req: Request, res: Response) => {
 const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const user = await getUserByEmail(email);
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  if (!user) {
     return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
+  
+  // Verify password using our enhanced method
+  const isPasswordValid = verifyPassword(password, user.password);
+  if (!isPasswordValid) {
+    return res.status(401).json({ success: false, message: "Invalid credentials" });
+  }
+  
   const token = generateToken({ id: user.id, role: user.role });
   
   // Create a user response object without sensitive data
@@ -104,13 +117,28 @@ const login = async (req: Request, res: Response) => {
 const changePassword = async (req: Request, res: Response) => {
   const user = req.user as User;
   const { oldPassword, newPassword } = req.body;
-  if (!user || !(await bcrypt.compare(oldPassword, user.password))) {
+  
+  // Verify old password
+  if (!user || !verifyPassword(oldPassword, user.password)) {
     return res.status(401).json({ success: false, message: "Invalid old password" });
   }
-  user.password = await bcrypt.hash(newPassword, 10);
-  user.updatedAt = Date.now();
-  await saveUserToDb(user);
-  res.json({ success: true, message: "Password changed successfully" });
+  
+  try {
+    // Re-encrypt private key with new password
+    const privateKey = decryptPrivateKey(user.encryptedPrivateKey, oldPassword);
+    const newEncryptedPrivateKey = encryptPrivateKey(privateKey, newPassword);
+    
+    // Update password and encrypted private key
+    user.password = hashPassword(newPassword);
+    user.encryptedPrivateKey = newEncryptedPrivateKey;
+    user.updatedAt = Date.now();
+    
+    await saveUserToDb(user);
+    res.json({ success: true, message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({ success: false, message: "Failed to change password" });
+  }
 };
 
 // Send verification email
@@ -191,11 +219,29 @@ const resetPassword = async (req: Request, res: Response) => {
   if (!user || user.passwordResetToken !== token || (user.passwordResetExpires && user.passwordResetExpires < Date.now())) {
     return res.status(400).json({ success: false, message: "Invalid or expired token" });
   }
-  user.password = await bcrypt.hash(password, 10);
-  user.passwordResetToken = undefined;
-  user.passwordResetExpires = undefined;
-  await saveUserToDb(user);
-  res.json({ success: true, message: "Password reset successfully" });
+  
+  try {
+    // In case of password reset, we need to generate a new keypair since we can't decrypt the old one
+    const { privateKey, publicKey } = generateKeyPair();
+    const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
+    
+    // Update user data
+    user.password = hashPassword(password);
+    user.walletAddress = publicKey;
+    user.encryptedPrivateKey = encryptedPrivateKey;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    user.updatedAt = Date.now();
+    
+    await saveUserToDb(user);
+    res.json({ 
+      success: true, 
+      message: "Password reset successfully. Note that a new keypair has been generated for your account." 
+    });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    res.status(500).json({ success: false, message: "Failed to reset password" });
+  }
 };
 
 // Logout user

@@ -19,6 +19,13 @@ export interface ExtendedTransaction extends Transaction {
   to?: string;
   fromUserId?: string;
   toUserId?: string;
+  price?: number;
+  productDetails?: {
+    nama_produk?: string;
+    deskripsi_product?: string;
+    quantity?: string | number;
+    price?: string | number;
+  };
 }
 
 export interface TransactionListResponse extends PaginatedResponse<ExtendedTransaction> {

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { signOut, useSession } from 'next-auth/react';
-import { Menu, X, LogOut, User, Home, Package, FileText, BarChart2, Layers, BookOpen, Users } from 'lucide-react';
+import { Menu, X, LogOut, User, Home, Package, FileText, BarChart2, Layers, BookOpen, Users, ShoppingBag } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -30,9 +30,9 @@ const navigationItems: NavItem[] = [
     authRequired: true,
   },
   {
-    label: 'Transactions',
-    href: '/transactions',
-    icon: <FileText className="w-5 h-5" />,
+    label: 'My Products',
+    href: '/my-products',
+    icon: <ShoppingBag className="w-5 h-5" />,
     authRequired: true,
   },
   {

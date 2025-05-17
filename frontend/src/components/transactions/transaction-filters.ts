@@ -6,4 +6,5 @@ export interface TransactionFilters {
   type?: string;
   productId?: string;
   userId?: string;
+  publicKey?: string;
 } 

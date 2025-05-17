@@ -3,203 +3,86 @@ import { Request, Response } from "express";
 
 import catcher from "../helper/handler"
 import {
+  // Operasi Blockchain Utama
   getLastBlock,
   getBlockchainState,
+  getBlockchainStats,
+  getBlockchainMiningStatus,
+  triggerManualMining,
+  
+  // Operasi Blok
+  getBlocks,
+  getBlockById,
+  getBlock,
+  getBlockTransactions,
+  
+  // Operasi Transaksi
+  getTransactionById,
+  getTransactionByHash,
+  getProductHistory,
+  
+  // Pencarian Blockchain
+  searchBlockchain
 } from "../controller/BlockchainController"
 
 const router = express.Router();
 
-router.get("/status", async (req: Request, res: Response) => {
-  try {
-    // Mock data - in a real implementation this would be obtained from the blockchain service
-    const blockchainStatus = {
-      networkName: "AgriChain Mainnet",
-      currentHeight: 12458,
-      totalTransactions: 53240,
-      lastBlockTime: new Date().toISOString(),
-      averageBlockTime: 5.2,
-      nodesOnline: 8,
-      isHealthy: true
-    };
+/**
+ * ===== BAGIAN 1: OPERASI BLOCKCHAIN UTAMA =====
+ */
 
-    res.status(200).json({
-      success: true,
-      data: blockchainStatus
-    });
-  } catch (error) {
-    console.error("Error getting blockchain status:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get blockchain status"
-    });
-  }
-});
+// Status blockchain
+router.get("/status", catcher(getBlockchainState));
 
-router.get("/blocks", async (req: Request, res: Response) => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+// Statistik blockchain lengkap
+router.get("/stats", catcher(getBlockchainStats));
 
-    // Mock data - in a real implementation this would be obtained from the blockchain service
-    const mockBlocks = [];
-    const startHeight = 12458 - ((page - 1) * limit);
-    
-    for (let i = 0; i < limit && startHeight - i > 0; i++) {
-      const blockHeight = startHeight - i;
-      mockBlocks.push({
-        hash: `block-hash-${blockHeight}`,
-        previousHash: `block-hash-${blockHeight - 1}`,
-        height: blockHeight,
-        timestamp: new Date(Date.now() - (i * 5000)).toISOString(),
-        transactions: [],
-        transactionCount: Math.floor(Math.random() * 10),
-        size: Math.floor(Math.random() * 1000) + 500,
-        createdBy: `node-${Math.floor(Math.random() * 8) + 1}`
-      });
-    }
+// Status mining dan transaksi tertunda
+router.get("/mining/status", catcher(getBlockchainMiningStatus));
 
-    res.status(200).json({
-      success: true,
-      data: mockBlocks,
-      pagination: {
-        page,
-        limit,
-        totalBlocks: 12458,
-        totalPages: Math.ceil(12458 / limit)
-      }
-    });
-  } catch (error) {
-    console.error("Error getting blockchain blocks:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get blockchain blocks"
-    });
-  }
-});
+// Memicu mining manual
+router.post("/mining/trigger", catcher(triggerManualMining));
 
-router.get("/blocks/:blockId", async (req: Request, res: Response) => {
-  try {
-    const { blockId } = req.params;
-    const isNumeric = /^\d+$/.test(blockId);
-    
-    // Mock data - in a real implementation this would be obtained from the blockchain service
-    const mockBlock = {
-      hash: isNumeric ? `block-hash-${blockId}` : blockId,
-      previousHash: isNumeric ? `block-hash-${parseInt(blockId) - 1}` : `prev-${blockId}`,
-      height: isNumeric ? parseInt(blockId) : 12345,
-      timestamp: new Date().toISOString(),
-      transactions: [],
-      transactionCount: 5,
-      size: 723,
-      createdBy: "node-3"
-    };
+// Blok terakhir (legacy endpoint)
+router.get("/last-block", catcher(getLastBlock));
 
-    res.status(200).json({
-      success: true,
-      data: mockBlock
-    });
-  } catch (error) {
-    console.error("Error getting block details:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get block details"
-    });
-  }
-});
+// Status blockchain (legacy endpoint)
+router.get("/state", catcher(getBlockchainState));
 
-router.get("/transactions/:txId", async (req: Request, res: Response) => {
-  try {
-    const { txId } = req.params;
-    
-    // Mock data - in a real implementation this would be obtained from the blockchain service
-    const mockTransaction = {
-      txId: txId,
-      blockHash: "block-hash-12345",
-      blockHeight: 12345,
-      timestamp: new Date().toISOString(),
-      type: "TRANSFER",
-      sender: "user-abc-123",
-      receiver: "user-xyz-789",
-      productId: "product-123",
-      data: {
-        quantity: 100,
-        price: 25000
-      },
-      status: "CONFIRMED"
-    };
+/**
+ * ===== BAGIAN 2: OPERASI BLOK =====
+ */
 
-    res.status(200).json({
-      success: true,
-      data: mockTransaction
-    });
-  } catch (error) {
-    console.error("Error getting transaction details:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get transaction details"
-    });
-  }
-});
+// Daftar blok blockchain dengan paginasi
+router.get("/blocks", catcher(getBlocks));
 
-router.get("/product/:productId/history", async (req: Request, res: Response) => {
-  try {
-    const { productId } = req.params;
-    
-    // Mock data - in a real implementation this would be obtained from the blockchain service
-    const mockHistory = [
-      {
-        txId: `tx-${Date.now()}-1`,
-        timestamp: new Date(Date.now() - 5000000).toISOString(),
-        action: "CREATED",
-        performedBy: "farmer-123",
-        roleType: "FARMER",
-        details: {
-          name: "Beras Organik Premium",
-          quantity: 100
-        },
-        blockHeight: 12300
-      },
-      {
-        txId: `tx-${Date.now()}-2`,
-        timestamp: new Date(Date.now() - 3000000).toISOString(),
-        action: "VERIFIED",
-        performedBy: "inspector-456",
-        roleType: "INSPECTOR",
-        details: {
-          quality: "Premium",
-          passedTests: ["visual", "chemical", "weight"]
-        },
-        blockHeight: 12350
-      },
-      {
-        txId: `tx-${Date.now()}-3`,
-        timestamp: new Date(Date.now() - 1000000).toISOString(),
-        action: "TRANSFERRED",
-        performedBy: "distributor-789",
-        roleType: "DISTRIBUTOR",
-        details: {
-          fromUser: "farmer-123",
-          toUser: "distributor-789",
-          quantity: 50
-        },
-        blockHeight: 12400
-      }
-    ];
+// Detail blok berdasarkan ID (height atau hash)
+router.get("/blocks/:blockId", catcher(getBlockById));
 
-    res.status(200).json({
-      success: true,
-      data: mockHistory
-    });
-  } catch (error) {
-    console.error("Error getting product history:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get product history"
-    });
-  }
-});
+// Mendapatkan blok dengan query parameter (dari legacy BlockRoute)
+router.get("/block", catcher(getBlock));
 
-router.get("/last-block", catcher(getLastBlock))
-router.get("/state", catcher(getBlockchainState))
+// Mendapatkan transaksi dalam blok (dari legacy BlockRoute)
+router.get("/block/transactions", catcher(getBlockTransactions));
+
+/**
+ * ===== BAGIAN 3: OPERASI TRANSAKSI =====
+ */
+
+// Detail transaksi berdasarkan ID
+router.get("/transactions/:txId", catcher(getTransactionById));
+
+// Detail transaksi berdasarkan hash (dari BlockchainExplorerRoute)
+router.get("/transaction/:hash", catcher(getTransactionByHash));
+
+// Riwayat transaksi produk
+router.get("/product/:productId/history", catcher(getProductHistory));
+
+/**
+ * ===== BAGIAN 4: PENCARIAN BLOCKCHAIN =====
+ */
+
+// Pencarian blockchain berdasarkan berbagai kriteria
+router.get("/search", catcher(searchBlockchain));
 
 export default router
