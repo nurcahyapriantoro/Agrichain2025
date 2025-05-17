@@ -10,27 +10,40 @@ export interface ButtonProps
   isLoading?: boolean;
 }
 
+// Create buttonVariants function to export
+export function buttonVariants({
+  variant = "default",
+  size = "default",
+  className = "",
+}: {
+  variant?: ButtonProps["variant"];
+  size?: ButtonProps["size"];
+  className?: string;
+} = {}) {
+  return cn(
+    "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none",
+    {
+      "bg-primary text-primary-foreground hover:bg-primary/90": variant === "primary",
+      "bg-secondary text-secondary-foreground hover:bg-secondary/80": variant === "secondary",
+      "bg-destructive text-destructive-foreground hover:bg-destructive/90": variant === "destructive",
+      "border border-input bg-background hover:bg-accent hover:text-accent-foreground": variant === "outline",
+      "bg-background hover:bg-accent hover:text-accent-foreground": variant === "ghost",
+      "text-primary underline-offset-4 hover:underline": variant === "link",
+      "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-100": variant === "default",
+      "h-10 py-2 px-4": size === "default",
+      "h-9 px-3 rounded-md": size === "sm",
+      "h-11 px-8 rounded-md": size === "lg",
+      "h-10 w-10": size === "icon",
+    },
+    className
+  );
+}
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, children, variant = "default", size = "default", isLoading = false, disabled, ...props }, ref) => {
     return (
       <button
-        className={cn(
-          "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none",
-          {
-            "bg-primary text-primary-foreground hover:bg-primary/90": variant === "primary",
-            "bg-secondary text-secondary-foreground hover:bg-secondary/80": variant === "secondary",
-            "bg-destructive text-destructive-foreground hover:bg-destructive/90": variant === "destructive",
-            "border border-input bg-background hover:bg-accent hover:text-accent-foreground": variant === "outline",
-            "bg-background hover:bg-accent hover:text-accent-foreground": variant === "ghost",
-            "text-primary underline-offset-4 hover:underline": variant === "link",
-            "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-100": variant === "default",
-            "h-10 py-2 px-4": size === "default",
-            "h-9 px-3 rounded-md": size === "sm",
-            "h-11 px-8 rounded-md": size === "lg",
-            "h-10 w-10": size === "icon",
-          },
-          className
-        )}
+        className={buttonVariants({ variant, size, className })}
         ref={ref}
         disabled={isLoading || disabled}
         {...props}

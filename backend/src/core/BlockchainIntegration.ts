@@ -1,7 +1,8 @@
 import Transaction from "../transaction";
-import { TransactionHistoryService } from "./TransactionHistory";
 import { ProductStatus, TransactionActionType, UserRole } from "../enum";
 import { getKeyPair } from "../../utils/keypair";
+import BlockchainMiningService from "./BlockchainMiningService";
+import { TransactionHistoryService } from "./TransactionHistory";
 
 /**
  * Kelas untuk menangani integrasi dengan blockchain
@@ -10,9 +11,17 @@ import { getKeyPair } from "../../utils/keypair";
 class BlockchainIntegration {
   private static instance: BlockchainIntegration;
   private transactionHandler: ((transaction: Transaction) => Promise<boolean>) | null = null;
+  private miningService: BlockchainMiningService;
 
   private constructor() {
     // Private constructor untuk singleton
+    this.miningService = BlockchainMiningService.getInstance();
+    
+    // Inisialisasi layanan mining dengan interval 2 menit
+    setTimeout(() => {
+      this.miningService.startMiningService(120);
+      console.log("BlockchainMiningService dimulai");
+    }, 5000); // Tunggu 5 detik setelah aplikasi dimulai
   }
 
   /**
@@ -31,6 +40,31 @@ class BlockchainIntegration {
    */
   public setTransactionHandler(handler: (transaction: Transaction) => Promise<boolean>): void {
     this.transactionHandler = handler;
+  }
+
+  /**
+   * Memproses transaksi dan menambahkannya ke daftar transaksi tertunda
+   * @param transaction Transaksi yang akan diproses
+   * @returns Hasil pemrosesan transaksi
+   */
+  private async processTransaction(transaction: Transaction): Promise<{ success: boolean; transactionHash?: string }> {
+    try {
+      // Tambahkan transaksi ke daftar transaksi tertunda untuk mining
+      this.miningService.addPendingTransaction(transaction);
+      
+      // Jika ada handler eksternal, panggil
+      if (this.transactionHandler) {
+        await this.transactionHandler(transaction);
+      }
+      
+      return {
+        success: true,
+        transactionHash: transaction.getHash()
+      };
+    } catch (error) {
+      console.error("Error saat memproses transaksi:", error);
+      return { success: false };
+    }
   }
 
   /**
@@ -66,31 +100,29 @@ class BlockchainIntegration {
       // Sign transaksi
       transaction.sign(keyPair);
       
-      // Kirim transaksi ke blockchain
-      if (this.transactionHandler) {
-        const isValid = await this.transactionHandler(transaction);
+      // Proses transaksi
+      const processResult = await this.processTransaction(transaction);
+      
+      if (processResult.success) {
+        // Catat transaksi di history service
+        const historyResult = await TransactionHistoryService.recordProductCreation(
+          productId,
+          fromUserId,
+          productData
+        );
         
-        if (isValid) {
-          // Catat transaksi di history service
-          const historyResult = await TransactionHistoryService.recordProductCreation(
-            productId,
-            fromUserId,
-            productData
+        if (historyResult.success && historyResult.transactionId) {
+          // Update blockchain details in transaction history
+          await this.updateTransactionWithBlockchainInfo(
+            historyResult.transactionId,
+            "pending", // Block hash belum tersedia sampai ditambahkan ke blok
+            transaction.getHash()
           );
           
-          if (historyResult.success && historyResult.transactionId) {
-            // Update blockchain details in transaction history
-            await this.updateTransactionWithBlockchainInfo(
-              historyResult.transactionId,
-              "pending", // Block hash belum tersedia sampai ditambahkan ke blok
-              transaction.getHash()
-            );
-            
-            return {
-              success: true,
-              transactionHash: transaction.getHash()
-            };
-          }
+          return {
+            success: true,
+            transactionHash: transaction.getHash()
+          };
         }
       }
       
@@ -146,34 +178,32 @@ class BlockchainIntegration {
       // Sign transaksi
       transaction.sign(keyPair);
       
-      // Kirim transaksi ke blockchain
-      if (this.transactionHandler) {
-        const isValid = await this.transactionHandler(transaction);
+      // Proses transaksi
+      const processResult = await this.processTransaction(transaction);
+      
+      if (processResult.success) {
+        // Catat transaksi di history service
+        const historyResult = await TransactionHistoryService.recordProductTransfer(
+          productId,
+          fromUserId,
+          fromRole,
+          toUserId,
+          toRole,
+          details
+        );
         
-        if (isValid) {
-          // Catat transaksi di history service
-          const historyResult = await TransactionHistoryService.recordProductTransfer(
-            productId,
-            fromUserId,
-            fromRole,
-            toUserId,
-            toRole,
-            details
+        if (historyResult.success && historyResult.transactionId) {
+          // Update blockchain details in transaction history
+          await this.updateTransactionWithBlockchainInfo(
+            historyResult.transactionId,
+            "pending", // Block hash belum tersedia sampai ditambahkan ke blok
+            transaction.getHash()
           );
           
-          if (historyResult.success && historyResult.transactionId) {
-            // Update blockchain details in transaction history
-            await this.updateTransactionWithBlockchainInfo(
-              historyResult.transactionId,
-              "pending", // Block hash belum tersedia sampai ditambahkan ke blok
-              transaction.getHash()
-            );
-            
-            return {
-              success: true,
-              transactionHash: transaction.getHash()
-            };
-          }
+          return {
+            success: true,
+            transactionHash: transaction.getHash()
+          };
         }
       }
       
@@ -223,33 +253,31 @@ class BlockchainIntegration {
       // Sign transaksi
       transaction.sign(keyPair);
       
-      // Kirim transaksi ke blockchain
-      if (this.transactionHandler) {
-        const isValid = await this.transactionHandler(transaction);
+      // Proses transaksi
+      const processResult = await this.processTransaction(transaction);
+      
+      if (processResult.success) {
+        // Catat transaksi di history service
+        const historyResult = await TransactionHistoryService.recordProductVerification(
+          productId,
+          verifierId,
+          verifierRole,
+          passed,
+          details
+        );
         
-        if (isValid) {
-          // Catat transaksi di history service
-          const historyResult = await TransactionHistoryService.recordProductVerification(
-            productId,
-            verifierId,
-            verifierRole,
-            passed,
-            details
+        if (historyResult.success && historyResult.transactionId) {
+          // Update blockchain details in transaction history
+          await this.updateTransactionWithBlockchainInfo(
+            historyResult.transactionId,
+            "pending", // Block hash belum tersedia sampai ditambahkan ke blok
+            transaction.getHash()
           );
           
-          if (historyResult.success && historyResult.transactionId) {
-            // Update blockchain details in transaction history
-            await this.updateTransactionWithBlockchainInfo(
-              historyResult.transactionId,
-              "pending", // Block hash belum tersedia sampai ditambahkan ke blok
-              transaction.getHash()
-            );
-            
-            return {
-              success: true,
-              transactionHash: transaction.getHash()
-            };
-          }
+          return {
+            success: true,
+            transactionHash: transaction.getHash()
+          };
         }
       }
       
@@ -283,6 +311,41 @@ class BlockchainIntegration {
     } catch (error) {
       console.error(`Error updating blockchain info for transaction ${transactionId}:`, error);
     }
+  }
+
+  /**
+   * Meminta mining dilakukan secara manual
+   * @returns Status mining
+   */
+  public async triggerManualMining(): Promise<{ success: boolean; message: string }> {
+    try {
+      const result = await this.miningService.mineTransactions();
+      if (result) {
+        return {
+          success: true,
+          message: "Mining berhasil dilakukan"
+        };
+      } else {
+        return {
+          success: false,
+          message: "Mining gagal atau tidak ada transaksi yang cukup untuk di-mining"
+        };
+      }
+    } catch (error) {
+      console.error("Error saat melakukan mining manual:", error);
+      return {
+        success: false,
+        message: "Terjadi kesalahan saat mining: " + (error instanceof Error ? error.message : String(error))
+      };
+    }
+  }
+
+  /**
+   * Mendapatkan jumlah transaksi tertunda
+   * @returns Jumlah transaksi tertunda
+   */
+  public getPendingTransactionsCount(): number {
+    return this.miningService.getPendingTransactionsCount();
   }
 }
 

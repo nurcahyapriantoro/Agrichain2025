@@ -16,9 +16,11 @@ export interface RegisterResponse {
 // Add types for private key response
 export interface PrivateKeyResponse {
   success: boolean;
-  data: {
+  data?: {
     privateKey: string;
+    walletAddress: string;
   };
+  message?: string;
 }
 
 // Add type for API responses
@@ -26,6 +28,31 @@ export interface ApiResponse<T> {
   success: boolean;
   message?: string;
   data?: T;
+}
+
+/**
+ * Response type for public key request
+ */
+export interface PublicKeyResponse {
+  success: boolean;
+  data?: {
+    publicKey: string;
+    userId: string;
+    userName: string;
+  };
+  message?: string;
+}
+
+/**
+ * Response type for checking keypair existence
+ */
+export interface KeyPairStatusResponse {
+  success: boolean;
+  data?: {
+    hasKeyPair: boolean;
+    publicKey: string | null;
+  };
+  message?: string;
 }
 
 /**
@@ -113,6 +140,34 @@ export const getPrivateKey = async (password: string): Promise<PrivateKeyRespons
 };
 
 /**
+ * Get the user's public key
+ */
+export const getPublicKey = async (): Promise<PublicKeyResponse> => {
+  return apiGet<PublicKeyResponse>('/user/public-key');
+};
+
+/**
+ * Check if the user has a keypair
+ */
+export const checkKeyPair = async (): Promise<KeyPairStatusResponse> => {
+  return apiGet<KeyPairStatusResponse>('/user/check-keypair');
+};
+
+/**
+ * Regenerate keypair for the user (requires password authentication)
+ */
+export const regenerateKeyPair = async (password: string): Promise<PublicKeyResponse> => {
+  return apiPost<PublicKeyResponse>('/user/regenerate-keypair', { password });
+};
+
+/**
+ * Get public key by user ID
+ */
+export const getPublicKeyById = async (userId: string): Promise<PublicKeyResponse> => {
+  return apiGet<PublicKeyResponse>(`/user/public-key/${userId}`);
+};
+
+/**
  * Update user email address
  */
 export const updateEmail = async (email: string): Promise<ApiResponse<{ user: User }>> => {
@@ -125,4 +180,25 @@ export const updateEmail = async (email: string): Promise<ApiResponse<{ user: Us
  */
 export const setupWalletPassword = async (password: string): Promise<ApiResponse<{ success: boolean }>> => {
   return apiPost<ApiResponse<{ success: boolean }>>('/user/setup-wallet-password', { password });
+};
+
+/**
+ * Export all functions as part of an authAPI object
+ */
+export const authAPI = {
+  login,
+  register,
+  getCurrentUser,
+  verifyEmail,
+  requestPasswordReset,
+  resetPassword,
+  changePassword,
+  logout,
+  getPrivateKey,
+  getPublicKey,
+  checkKeyPair,
+  regenerateKeyPair,
+  getPublicKeyById,
+  updateEmail,
+  setupWalletPassword
 }; 

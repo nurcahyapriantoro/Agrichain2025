@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { txhashDB } from "../../helper/level.db.client";
-import { decryptPrivateKey } from "../../utils/encryption";
+import { encryptPrivateKey, decryptPrivateKey } from "../../utils/encryption";
 import { UserRole } from "../../enum";
 import { 
   User,
@@ -46,17 +46,121 @@ const getUser = async (req: Request, res: Response) => {
 
 // Get private key
 const getPrivateKey = async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const user = req.user as User;
   const { password } = req.body;
-  const user = await getUserById(id);
+  
   if (!user || !user.encryptedPrivateKey) {
     return res.status(404).json({ success: false, message: "User or private key not found" });
   }
+  
   try {
     const privateKey = decryptPrivateKey(user.encryptedPrivateKey, password);
-    res.json({ success: true, privateKey });
+    res.json({ 
+      success: true, 
+      data: {
+        privateKey,
+        walletAddress: user.walletAddress
+      }
+    });
   } catch (error) {
     res.status(401).json({ success: false, message: "Invalid password" });
+  }
+};
+
+// Get user's public key
+const getPublicKey = async (req: Request, res: Response) => {
+  const user = req.user as User;
+  
+  if (!user || !user.walletAddress) {
+    return res.status(404).json({ success: false, message: "User or public key not found" });
+  }
+  
+  res.json({ 
+    success: true, 
+    data: {
+      publicKey: user.walletAddress,
+      userId: user.id,
+      userName: user.name
+    }
+  });
+};
+
+// Check if user has keypair
+const checkKeyPair = async (req: Request, res: Response) => {
+  const user = req.user as User;
+  
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  
+  const hasKeyPair = !!(user.walletAddress && user.encryptedPrivateKey);
+  
+  res.json({ 
+    success: true, 
+    data: {
+      hasKeyPair,
+      publicKey: user.walletAddress || null
+    }
+  });
+};
+
+// Regenerate keypair for user
+const regenerateKeyPair = async (req: Request, res: Response) => {
+  const user = req.user as User;
+  const { password } = req.body;
+  
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  
+  try {
+    // Generate new keypair
+    const { privateKey, publicKey } = generateKeyPair();
+    
+    // Encrypt private key with user's password
+    const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
+    
+    // Update user record
+    user.walletAddress = publicKey;
+    user.encryptedPrivateKey = encryptedPrivateKey;
+    user.updatedAt = Date.now();
+    
+    await saveUserToDb(user);
+    
+    res.json({ 
+      success: true, 
+      message: "Key pair regenerated successfully",
+      data: {
+        publicKey
+      }
+    });
+  } catch (error) {
+    console.error("Error regenerating key pair:", error);
+    res.status(500).json({ success: false, message: "Failed to regenerate key pair" });
+  }
+};
+
+// Get public key by user ID
+const getPublicKeyById = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  try {
+    const user = await getUserById(id);
+    if (!user || !user.walletAddress) {
+      return res.status(404).json({ success: false, message: "User or public key not found" });
+    }
+    
+    res.json({ 
+      success: true, 
+      data: {
+        publicKey: user.walletAddress,
+        userId: user.id,
+        userName: user.name
+      }
+    });
+  } catch (error) {
+    console.error("Error retrieving public key:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve public key" });
   }
 };
 
@@ -106,6 +210,10 @@ export {
   getUserList, 
   getUser, 
   getPrivateKey,
+  getPublicKey,
+  checkKeyPair,
+  regenerateKeyPair,
+  getPublicKeyById,
   updateUserProfile,
   updateUserRole,
   getProfileInfo,

@@ -18,6 +18,7 @@ export interface TransactionFilters {
   type?: string;
   productId?: string;
   userId?: string;
+  publicKey?: string;
 }
 
 interface TransactionFiltersProps {
@@ -173,6 +174,4 @@ export const TransactionFilters: React.FC<TransactionFiltersProps> = ({
       </div>
     </div>
   );
-};
-
-export default TransactionFilters; 
+}; 

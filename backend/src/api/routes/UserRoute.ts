@@ -5,6 +5,10 @@ import {
   getUserList,
   getUser,
   getPrivateKey,
+  getPublicKey,
+  checkKeyPair,
+  regenerateKeyPair,
+  getPublicKeyById,
   updateUserProfile,
   updateUserRole,
   getProfileInfo,
@@ -13,8 +17,12 @@ import { authenticateJWT } from "../../middleware/auth"
 
 const router = Router()
 
-// User private key retrieval
+// User keypair management endpoints
 router.post("/private-key", authenticateJWT, catcher(getPrivateKey))
+router.get("/public-key", authenticateJWT, catcher(getPublicKey))
+router.get("/check-keypair", authenticateJWT, catcher(checkKeyPair))
+router.post("/regenerate-keypair", authenticateJWT, catcher(regenerateKeyPair))
+router.get("/public-key/:id", authenticateJWT, catcher(getPublicKeyById))
 
 // User listing and profiles
 router.get("/", catcher(getUserList))
