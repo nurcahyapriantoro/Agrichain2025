@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { FaGoogle } from 'react-icons/fa';
 import { UserRole } from '@/lib/types';
+import { authAPI } from '@/lib/api/auth';
 
 declare global {
   interface Window {
@@ -135,6 +136,13 @@ export default function LoginPage() {
                 localStorage.setItem('fallbackAuthToken', token);
                 localStorage.setItem('fallbackUserData', JSON.stringify(userData));
                 
+                // Also store in sessionStorage for immediate use
+                const sessionData = {
+                  user: userData,
+                  accessToken: token
+                };
+                sessionStorage.setItem('session', JSON.stringify(sessionData));
+                
                 // Redirect ke dashboard walau NextAuth gagal
                 router.push('/');
                 return;
@@ -173,12 +181,10 @@ export default function LoginPage() {
       setIsLoading(true);
       setError(null);
       
-      // Google login dengan redirect ke homepage
-      await signIn('google', { 
-        callbackUrl: '/'
-      });
+      // Use our custom Google login function that redirects to backend OAuth
+      authAPI.loginWithGoogle();
       
-      // Kode di bawah ini biasanya tidak berjalan karena otomatis redirect
+      // This function redirects, so the code below won't run
     } catch (error: any) {
       console.error('Google login error:', error);
       setError('Gagal login dengan Google. Silakan coba lagi.');
@@ -230,6 +236,9 @@ export default function LoginPage() {
       console.log('MetaMask login result:', data);
       
       if (data.success) {
+        // Check if user needs to complete their profile (has default email)
+        const isDefaultEmail = data.user.email && data.user.email.endsWith('@wallet.agrichain.local');
+        
         // Simpan token autentikasi
         localStorage.setItem('walletAuthToken', data.token);
         localStorage.setItem('web3AuthToken', data.token);
@@ -264,10 +273,29 @@ export default function LoginPage() {
           'session': sessionStorage.getItem('session')
         });
         
-        // Redirect to home
-        router.push('/');
+        // If user has default email, redirect to complete profile page
+        if (isDefaultEmail) {
+          console.log('User needs to complete profile...');
+          router.push('/complete-profile');
+        } else {
+          // Redirect to home
+          router.push('/');
+        }
       } else {
-        setError(data.message || 'Failed to authenticate with MetaMask.');
+        // Check if error is because wallet is not registered
+        if (data.code === 'WALLET_NOT_REGISTERED') {
+          console.log('Wallet not registered, redirecting to registration page...');
+          
+          // Store information needed for registration
+          localStorage.setItem('pendingWalletRegistration', 'true');
+          localStorage.setItem('pendingWalletAddress', address);
+          localStorage.setItem('tempWalletToken', signature); // Use signature as a temporary token
+          
+          // Redirect to wallet registration page with wallet address
+          router.push(`/auth/register/wallet?address=${address}&signature=${encodeURIComponent(signature)}&message=${encodeURIComponent(message)}&chainId=${chainId}`);
+        } else {
+          setError(data.message || 'Failed to authenticate with MetaMask.');
+        }
       }
     } catch (error: any) {
       console.error('MetaMask login error:', error);

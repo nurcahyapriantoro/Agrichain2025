@@ -58,4 +58,18 @@ export const changePassword = async (currentPassword: string, newPassword: strin
  */
 export const getCurrentUser = async (): Promise<User> => {
   return apiGet<User>('/user/profile');
+};
+
+/**
+ * Upload profile picture
+ */
+export const uploadProfilePicture = async (file: File): Promise<{ success: boolean; data?: { profilePicture: string } }> => {
+  const formData = new FormData();
+  formData.append('profilePicture', file);
+  
+  return apiPost<{ success: boolean; data?: { profilePicture: string } }>('/user/profile-picture', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
 }; 

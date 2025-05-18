@@ -44,22 +44,44 @@ const getStatusBadgeClass = (status: string | undefined) => {
 
 // Web3 background animation component
 function Web3Background() {
+  const [particles, setParticles] = useState<Array<{
+    left: string;
+    top: string;
+    width: string;
+    height: string;
+    animationDelay: string;
+    animationDuration: string;
+  }>>([]);
+
+  // Generate particles only on client-side to avoid hydration mismatch
+  useEffect(() => {
+    const newParticles = Array(30).fill(0).map(() => ({
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      width: `${Math.random() * 8 + 4}px`,
+      height: `${Math.random() * 8 + 4}px`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${Math.random() * 10 + 10}s`
+    }));
+    setParticles(newParticles);
+  }, []);
+
   return (
     <div className="fixed inset-0 -z-10 bg-gradient-to-br from-[#18122B] via-[#232526] to-[#0f2027] animate-gradient-move overflow-hidden">
       {/* Animated particles */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(30)].map((_, i) => (
+        {particles.map((particle, i) => (
           <div
             key={`particle-${i}`}
             className="absolute rounded-full opacity-20 animate-float"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${Math.random() * 8 + 4}px`,
-              height: `${Math.random() * 8 + 4}px`,
+              left: particle.left,
+              top: particle.top,
+              width: particle.width,
+              height: particle.height,
               background: `linear-gradient(135deg, #a259ff, #00ffcc, #00bfff)`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${Math.random() * 10 + 10}s`
+              animationDelay: particle.animationDelay,
+              animationDuration: particle.animationDuration
             }}
           />
         ))}
@@ -164,7 +186,7 @@ export default function MyProductsPage() {
               <Info className="h-5 w-5 text-yellow-500 mr-2" />
               <p className="text-yellow-200">
                 {userRole === UserRole.RETAILER 
-                  ? "As a Retailer, you can sell products to consumers but cannot transfer to other roles."
+                  ? "As a Retailer, you cannot transfer to other roles."
                   : "Your role doesn't support transferring products in the supply chain."}
               </p>
             </div>

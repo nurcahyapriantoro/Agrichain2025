@@ -22,6 +22,9 @@ const jwtAlgorithm = process.env.JWT_ALGORITHM && validAlgorithms.includes(proce
   ? process.env.JWT_ALGORITHM
   : 'HS256';
 
+// Export JWT_SECRET for use in authentication middleware
+export const JWT_SECRET = jwtSecret;
+
 export const jwtConfig = {
   // Tidak akan pernah undefined
   secret: jwtSecret,
@@ -33,4 +36,4 @@ export const jwtConfig = {
   algorithm: jwtAlgorithm,
   // Issuer untuk validasi tambahan
   issuer: 'agrichain-api'
-}; 
+};

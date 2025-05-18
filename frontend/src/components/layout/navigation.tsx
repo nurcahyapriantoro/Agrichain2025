@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { signOut, useSession } from 'next-auth/react';
-import { Menu, X, LogOut, User, Home, Package, FileText, BarChart2, Layers, BookOpen, Users, ShoppingBag } from 'lucide-react';
+import { Menu, X, LogOut, User, Home, Package, FileText, BarChart2, Layers, BookOpen, Users, ShoppingBag, AlertCircle } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -131,7 +131,6 @@ export function Navigation() {
   if (!isMounted) {
     return null;
   }
-
   // Gunakan session ATAU walletAuth untuk menentukan status login
   const isAuthenticated = !!session || walletAuth.isAuthenticated;
   
@@ -142,6 +141,10 @@ export function Navigation() {
   
   // Dapatkan userName dari keduanya
   const userName = session?.user?.name || walletAuth.userData?.name || 'Profile';
+  
+  // Check if wallet user needs to complete profile (has default email)
+  const userEmail = session?.user?.email || walletAuth.userData?.email;
+  const needsProfileCompletion = userEmail && userEmail.endsWith('@wallet.agrichain.local');
 
   // Check if we're on auth pages (login or register)
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/register/');
@@ -250,9 +253,24 @@ export function Navigation() {
             </div>
           </div>
 
-          <div className="hidden md:flex items-center space-x-2">
-            {isAuthenticated ? (
+          <div className="hidden md:flex items-center space-x-2">            {isAuthenticated ? (
               <div className="flex items-center space-x-2">
+                {needsProfileCompletion && (
+                  <Link
+                    href="/complete-profile"
+                    className="relative px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center group overflow-hidden bg-amber-500/10 border border-amber-500/30"
+                  >
+                    <div className="absolute inset-0 bg-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-lg"></div>
+                    <div className="relative z-10 flex items-center text-amber-400 group-hover:text-amber-300 transition-colors duration-300">
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-amber-500 rounded-full blur-sm opacity-0 group-hover:opacity-30 transition-opacity duration-300"></div>
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <span className="ml-2">Complete Profile</span>
+                    </div>
+                  </Link>
+                )}
+                
                 <Link
                   href="/profile"
                   className="relative px-3 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center group overflow-hidden"
@@ -349,9 +367,7 @@ export function Navigation() {
                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-gradient-to-r from-[#00ffcc] to-[#a259ff]"></div>
               )}
             </Link>
-          ))}
-
-          {isAuthenticated ? (
+          ))}          {isAuthenticated ? (
             <>
               <Link
                 href="/profile"
@@ -363,6 +379,20 @@ export function Navigation() {
                 </div>
                 <span className="ml-3 text-[#a259ff] group-hover:text-white transition-colors duration-300">{userName}</span>
               </Link>
+              
+              {needsProfileCompletion && (
+                <Link
+                  href="/complete-profile"
+                  className="block px-3 py-3 rounded-lg text-base font-medium flex items-center bg-amber-500/10 border border-amber-500/30 group transition-all duration-300"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="text-amber-400 group-hover:text-amber-300 transition-colors duration-300">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <span className="ml-3 text-amber-400 group-hover:text-amber-300 transition-colors duration-300">Complete Your Profile</span>
+                </Link>
+              )}
+              
               <button
                 onClick={() => {
                   setMobileMenuOpen(false);

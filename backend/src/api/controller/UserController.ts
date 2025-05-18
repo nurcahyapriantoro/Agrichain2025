@@ -17,12 +17,20 @@ const getUserList = async (_req: Request, res: Response) => {
   try {
     const allKeys = await txhashDB.keys().all();
     const userKeys = allKeys.filter(key => key.startsWith('user:'));
-    const userList = await Promise.all(
-      userKeys.map(async key => {
+    
+    const userList = [];
+    for (const key of userKeys) {
+      try {
         const userData = await txhashDB.get(key);
-        return JSON.parse(userData) as User;
-      })
-    );
+        // Check if userData is already an object or needs parsing
+        const userObj = typeof userData === 'object' ? userData : JSON.parse(userData);
+        userList.push(userObj);
+      } catch (parseError) {
+        console.error(`Error parsing user data for key ${key}:`, parseError);
+        // Continue processing other users
+      }
+    }
+    
     res.json({ success: true, data: userList });
   } catch (error) {
     console.error("Error retrieving user list:", error);
@@ -206,6 +214,38 @@ const getProfileInfo = async (req: Request, res: Response) => {
   res.json({ success: true, data: user });
 };
 
+// Upload profile picture
+const uploadProfilePicture = async (req: Request, res: Response) => {
+  const user = req.user as User;
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "No file uploaded" });
+  }
+
+  try {
+    // Update user's profile picture with the file path
+    const filePath = `/uploads/${req.file.filename}`;
+    user.profilePicture = filePath;
+    user.updatedAt = Date.now();
+    
+    await saveUserToDb(user);
+    
+    res.json({ 
+      success: true, 
+      message: "Profile picture uploaded successfully",
+      data: {
+        profilePicture: filePath
+      }
+    });
+  } catch (error) {
+    console.error("Error uploading profile picture:", error);
+    res.status(500).json({ success: false, message: "Failed to upload profile picture" });
+  }
+};
+
 export { 
   getUserList, 
   getUser, 
@@ -217,6 +257,7 @@ export {
   updateUserProfile,
   updateUserRole,
   getProfileInfo,
+  uploadProfilePicture,
   getUserById,
   saveUserToDb,
   getUserByEmail,

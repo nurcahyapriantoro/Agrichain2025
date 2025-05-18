@@ -16,6 +16,16 @@ export interface User {
   phone?: string;
   address?: string;
   profilePicture?: string;
+  latitude?: number;
+  longitude?: number;
+  companyName?: string;
+  bio?: string;
+  website?: string;
+  socialMedia?: {
+    facebook?: string;
+    twitter?: string;
+    instagram?: string;
+  };
   createdAt?: number;
   updatedAt?: number;
   isEmailVerified?: boolean;
