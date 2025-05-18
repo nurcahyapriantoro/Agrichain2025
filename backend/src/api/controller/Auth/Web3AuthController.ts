@@ -16,22 +16,11 @@ const loginWithWallet = async (req: Request, res: Response) => {
   } 
   let user = await getUserByWalletAddress(address);
   if (!user) {
-    const userId = generateUserId("USER"); 
-    generateKeyPair(); 
-    user = {
-      id: userId,
-      name: `Wallet ${address.substring(0, 6)}`,
-      role: "USER",
-      walletAddress: address.toLowerCase(),
-      authMethods: ["metamask"],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      isEmailVerified: true,
-      email: `${address.substring(0, 6)}@wallet.agrichain.local`,
-      password: "",
-      encryptedPrivateKey: "",
-    };
-    await saveUserToDb(user);
+    return res.status(404).json({ 
+      success: false, 
+      message: "Wallet not registered. Please register first.",
+      needsRegistration: true
+    });
   }
   const token = generateToken({ id: user.id, role: user.role, walletAddress: user.walletAddress });
   res.status(200).json({
@@ -52,6 +41,16 @@ const registerWithWallet = async (req: Request, res: Response) => {
   if (!role) {
     return res.status(400).json({ success: false, message: "Role is required" });
   }
+  
+  // Validate role format
+  const validRoles = ["FARMER", "COLLECTOR", "TRADER", "RETAILER", "CONSUMER"];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Invalid role. Must be one of: FARMER, COLLECTOR, TRADER, RETAILER, CONSUMER" 
+    });
+  }
+  
   if (!address) {
     return res.status(400).json({ success: false, message: "Address is required" });
   }
@@ -98,7 +97,7 @@ const registerWithWallet = async (req: Request, res: Response) => {
     authMethods: ["metamask"],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    isEmailVerified: true,
+    isEmailVerified: false,
     email: `${address.substring(0, 6)}@wallet.agrichain.local`,
     password: "",
     encryptedPrivateKey: "",

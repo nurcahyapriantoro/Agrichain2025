@@ -5,6 +5,7 @@ import { Navigation } from "@/components/layout/navigation";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 import { ClientCopyright } from "@/components/client-copyright";
+import { setupGlobalErrorHandlers } from "@/lib/errorHandling";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,6 +27,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Setup global error handling
+  if (typeof window !== 'undefined') {
+    setupGlobalErrorHandlers();
+  }
+  
   return (
     <html lang="en" suppressHydrationWarning>
       <body

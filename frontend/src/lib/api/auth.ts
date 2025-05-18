@@ -183,6 +183,29 @@ export const setupWalletPassword = async (password: string): Promise<ApiResponse
 };
 
 /**
+ * Initiate Google OAuth login
+ * Redirects the user to the Google authentication page
+ */
+export const loginWithGoogle = (): void => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
+  window.location.href = `${apiUrl}/auth/google`;
+};
+
+/**
+ * Update wallet user's profile with email and password
+ * This is called after a user logs in with wallet and needs to complete their profile
+ */
+export const updateWalletUserProfile = async (
+  email: string, 
+  password: string
+): Promise<ApiResponse<{ user: User }>> => {
+  return apiPost<ApiResponse<{ user: User }>>(
+    '/user/wallet/update-profile', 
+    { email, password }
+  );
+};
+
+/**
  * Export all functions as part of an authAPI object
  */
 export const authAPI = {
@@ -200,5 +223,7 @@ export const authAPI = {
   regenerateKeyPair,
   getPublicKeyById,
   updateEmail,
-  setupWalletPassword
+  setupWalletPassword,
+  loginWithGoogle,
+  updateWalletUserProfile
 }; 

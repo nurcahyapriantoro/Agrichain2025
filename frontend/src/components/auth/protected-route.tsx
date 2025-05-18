@@ -25,38 +25,46 @@ export function ProtectedRoute({
 
   useEffect(() => {
     const checkAuth = async () => {
-      // Check for wallet-based authentication
+      // Check for various authentication sources
       const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
       const walletUserData = localStorage.getItem('walletUserData');
       const walletAddress = localStorage.getItem('walletAddress');
+      const fallbackAuthToken = localStorage.getItem('fallbackAuthToken');
+      const fallbackUserData = localStorage.getItem('fallbackUserData');
       
       const hasWalletAuth = !!walletToken && !!walletUserData;
       const hasConnectedWallet = !!walletAddress;
+      const hasFallbackAuth = !!fallbackAuthToken && !!fallbackUserData;
       
       console.log('ProtectedRoute: Checking auth sources', { 
         nextAuth: status, 
         walletAuth: hasWalletAuth,
+        fallbackAuth: hasFallbackAuth,
         connectedWallet: hasConnectedWallet,
         session: session ? 'exists' : 'none',
         walletToken: walletToken ? 'exists' : 'none',
         walletUserData: walletUserData ? 'exists' : 'none',
-        walletAddress: walletAddress ? 'exists' : 'none'
+        walletAddress: walletAddress ? 'exists' : 'none',
+        fallbackAuthToken: fallbackAuthToken ? 'exists' : 'none'
       });
 
-      // Fix untuk data autentikasi wallet yang tidak lengkap
+      // Cek untuk wallet yang belum terdaftar (ada token tapi tidak ada userData)
       if (walletToken && !walletUserData) {
-        console.warn('ProtectedRoute: Token exists but user data is missing');
-        // Jika hanya ada token tetapi tidak ada userData, coba simpan minimal userData
-        try {
-          const userData = { 
-            role: UserRole.FARMER, // Default role
-            walletAddress: walletAddress || 'unknown'
-          };
-          localStorage.setItem('walletUserData', JSON.stringify(userData));
-          console.log('ProtectedRoute: Created basic userData', userData);
-        } catch (error) {
-          console.error('Error creating basic userData:', error);
+        console.warn('ProtectedRoute: Token exists but user data is missing - redirecting to wallet registration');
+        // Arahkan ke halaman registrasi wallet daripada membuat userData default
+        localStorage.setItem('pendingWalletRegistration', 'true');
+        if (walletAddress) {
+          localStorage.setItem('pendingWalletAddress', walletAddress);
         }
+        // Simpan token sementara untuk proses registrasi
+        localStorage.setItem('tempWalletToken', walletToken);
+        // Hapus token autentikasi karena belum selesai registrasi
+        localStorage.removeItem('walletAuthToken');
+        localStorage.removeItem('web3AuthToken');
+        
+        // Redirect ke halaman registrasi wallet
+        router.push('/auth/register/wallet');
+        return;
       }
 
       // If using NextAuth session
@@ -68,15 +76,30 @@ export function ProtectedRoute({
         };
         sessionStorage.setItem('session', JSON.stringify(sessionData));
       }
+      // Also check for fallback authentication
+      else if (hasFallbackAuth) {
+        try {
+          const userData = JSON.parse(fallbackUserData || '{}');
+          // Store as a session-like structure in sessionStorage for API client
+          const sessionData = {
+            user: userData,
+            accessToken: fallbackAuthToken
+          };
+          sessionStorage.setItem('session', JSON.stringify(sessionData));
+          console.log('ProtectedRoute: Using fallback authentication', sessionData);
+        } catch (error) {
+          console.error('Error parsing fallback user data:', error);
+        }
+      }
 
       // Check if the user is loading
-      if (status === 'loading' && !hasWalletAuth) {
+      if (status === 'loading' && !hasWalletAuth && !hasFallbackAuth) {
         console.log('ProtectedRoute: Authentication status is loading');
         return;
       }
 
-      // If the user is not authenticated via NextAuth and has no wallet auth
-      if (status === 'unauthenticated' && !hasWalletAuth) {
+      // If the user is not authenticated via NextAuth, wallet, or fallback
+      if (status === 'unauthenticated' && !hasWalletAuth && !hasFallbackAuth) {
         const isAuthPage = window.location.pathname.includes('/auth/login') || 
                           window.location.pathname.includes('/auth/register');
         
@@ -87,11 +110,12 @@ export function ProtectedRoute({
         }
       }
 
-      // Get user role from session or wallet
+      // Get user role from any available authentication source
       let userRole = session?.user?.role;
       let needsRoleSelection = session?.user?.needsRoleSelection;
       
-      if (hasWalletAuth && !userRole) {
+      // Try to get from wallet auth if needed
+      if (!userRole && hasWalletAuth) {
         try {
           const userData = JSON.parse(walletUserData || '{}');
           userRole = userData.role;
@@ -156,13 +180,25 @@ export function ProtectedRoute({
   }
 
   if (status === 'unauthenticated') {
-    // Check if wallet auth is present before returning null
+    // Check if wallet auth or fallback auth is present before returning null
     const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
     const walletUserData = localStorage.getItem('walletUserData');
+    const fallbackToken = localStorage.getItem('fallbackAuthToken');
+    const fallbackUserData = localStorage.getItem('fallbackUserData');
     
-    if (walletToken && walletUserData) {
-      console.log('ProtectedRoute: NextAuth shows unauthenticated but wallet auth exists');
-      // Return children since wallet auth is valid
+    // Check if user is in the process of wallet registration
+    const pendingWalletRegistration = localStorage.getItem('pendingWalletRegistration');
+    const isWalletRegPath = window.location.pathname.includes('/auth/register/wallet');
+    
+    if (pendingWalletRegistration && !isWalletRegPath) {
+      console.log('ProtectedRoute: Wallet registration is pending, redirecting to wallet registration');
+      router.push('/auth/register/wallet');
+      return null;
+    }
+    
+    if ((walletToken && walletUserData) || (fallbackToken && fallbackUserData)) {
+      console.log('ProtectedRoute: NextAuth shows unauthenticated but alternative auth exists');
+      // Return children since alternative auth is valid
       return <>{children}</>;
     }
     

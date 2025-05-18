@@ -5,6 +5,7 @@ import { ReactNode, useEffect } from 'react';
 import { UserProvider } from '../../contexts/user/UserContext';
 import { useRouter } from 'next/navigation';
 import { UserRole } from '@/lib/types';
+import { ErrorBoundary } from '@/components/error-boundary';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -15,7 +16,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Add session management
   useEffect(() => {
-    const handleWalletAuth = () => {
+    const handleAuth = () => {
       // Check if session exists in storage
       const session = sessionStorage.getItem('session');
       
@@ -24,14 +25,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const walletUserData = localStorage.getItem('walletUserData');
       const walletAddress = localStorage.getItem('walletAddress');
       
+      // Get fallback authentication data
+      const fallbackToken = localStorage.getItem('fallbackAuthToken');
+      const fallbackUserData = localStorage.getItem('fallbackUserData');
+      
       const hasWalletAuth = !!walletToken && !!walletUserData && !!walletAddress;
+      const hasFallbackAuth = !!fallbackToken && !!fallbackUserData;
       
       console.log('AuthProvider: Checking auth sources', { 
         session: session ? 'exists' : 'none',
         walletToken: walletToken ? 'exists' : 'none',
         walletUserData: walletUserData ? 'exists' : 'none',
         walletAddress: walletAddress ? 'exists' : 'none',
-        hasWalletAuth
+        fallbackToken: fallbackToken ? 'exists' : 'none',
+        fallbackUserData: fallbackUserData ? 'exists' : 'none',
+        hasWalletAuth,
+        hasFallbackAuth
       });
 
       // If successfully authenticated via wallet but userData is missing or incomplete
@@ -69,6 +78,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
       
+      // Check for and handle fallback auth
+      if (fallbackToken && fallbackUserData && !session) {
+        try {
+          const userData = JSON.parse(fallbackUserData);
+          console.log('AuthProvider: Using fallback auth', userData);
+          
+          // Create a session format compatible with what the app expects
+          const sessionData = {
+            user: {
+              id: userData.id || 'fallback-user',
+              name: userData.name || 'Fallback User',
+              email: userData.email || '',
+              role: userData.role || UserRole.FARMER,
+              // Add other user properties as needed
+            },
+            accessToken: fallbackToken
+          };
+          
+          // Store in sessionStorage for API client and other components
+          sessionStorage.setItem('session', JSON.stringify(sessionData));
+        } catch (e) {
+          console.error('AuthProvider: Error creating session from fallback auth:', e);
+        }
+      }
+      
       // If wallet auth is complete, simulate a session
       if (hasWalletAuth && !session) {
         try {
@@ -100,13 +134,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     // Listen for storage changes
-    window.addEventListener('storage', handleWalletAuth);
+    window.addEventListener('storage', handleAuth);
     
     // Initial check - CRITICAL to run at component mount
-    handleWalletAuth();
+    handleAuth();
 
     return () => {
-      window.removeEventListener('storage', handleWalletAuth);
+      window.removeEventListener('storage', handleAuth);
     };
   }, [router]);
 
@@ -115,9 +149,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       refetchInterval={5 * 60} // Refetch session every 5 minutes
       refetchOnWindowFocus={true} // Refetch when window gains focus
     >
-      <UserProvider>
-        {children}
-      </UserProvider>
+      <ErrorBoundary name="UserProvider">
+        <UserProvider>
+          {children}
+        </UserProvider>
+      </ErrorBoundary>
     </SessionProvider>
   );
 }

@@ -13,8 +13,9 @@ import { User, UserRole } from '@/types/user';
 import { PasswordModal } from '@/components/ui/password-modal';
 import { PrivateKeyModal } from '@/components/ui/private-key-modal';
 import { RoleSelectionModal } from '@/components/ui/role-selection-modal';
-import { Copy } from 'lucide-react';
+import { Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import clsx from 'clsx';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 // Define the session structure
 interface SessionUser {
@@ -27,6 +28,7 @@ interface SessionUser {
   phone?: string;
   address?: string;
   profilePicture?: string;
+  companyName?: string;
   isEmailVerified?: boolean;
   needsRoleSelection?: boolean;
 }
@@ -37,7 +39,6 @@ interface Session {
 }
 
 const profileSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
   phone: z.string().optional(),
   address: z.string().optional(),
 });
@@ -99,6 +100,10 @@ export default function ProfilePage() {
   
   // New state for role selection
   const [isRoleSelectionOpen, setIsRoleSelectionOpen] = useState(false);
+  
+  // New state for profile toggles
+  const [showProfileUpdate, setShowProfileUpdate] = useState(false);
+  const [showPasswordUpdate, setShowPasswordUpdate] = useState(false);
 
   // State for copy-to-clipboard feedback
   const [isCopied, setIsCopied] = useState(false);
@@ -166,51 +171,45 @@ export default function ProfilePage() {
       // Our getCurrentUser function always returns a data object now, even in case of errors
       console.log('User profile response:', response);
       
-      if (response) {
-        setUserData(response);
-          
-        // Set form default values
-        setProfileValue('name', response.name || '');
-        setProfileValue('phone', response.phone || '');
-        setProfileValue('address', response.address || '');
-      } else {
-        console.warn('Unexpected response format:', response);
-        useSessionAsFallback();
-      }
+      // Set location if available
+      setUserData(response);
+      
+      // Initialize form values
+      setProfileValue('phone', response.phone || '');
+      setProfileValue('address', response.address || '');
+      
+      setIsLoading(false);
     } catch (error: any) {
       console.error('Error fetching user profile:', error);
-      useSessionAsFallback();
-    } finally {
+      setProfileError(error.message || 'Failed to load profile');
       setIsLoading(false);
+      
+      // Set to empty data structure to avoid undefined errors
+      setUserData(null);
+      
+      useSessionAsFallback();
     }
   };
   
-  // Helper function to use session data as fallback
   const useSessionAsFallback = () => {
     if (session?.user) {
-      console.log('Using session data as fallback for profile');
-      const sessionUserData = {
-        id: session.user.id || '',
-        email: session.user.email || '',
+      console.log('Using session data as fallback', session.user);
+      const sessionUser: User = {
+        id: session.user.id,
+        email: session.user.email,
         name: session.user.name || '',
-        role: (session.user.role as UserRole) || UserRole.CONSUMER,
-        walletAddress: session.user.walletAddress || '',
+        role: session.user.role,
+        walletAddress: session.user.walletAddress || session.user.publicKey || '',
         phone: session.user.phone || '',
         address: session.user.address || '',
         profilePicture: session.user.profilePicture || '',
-        isEmailVerified: session.user.isEmailVerified || false,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
       };
       
-      setUserData(sessionUserData);
+      setUserData(sessionUser);
       
-      // Set form values from session
-      setProfileValue('name', session.user.name || '');
-      setProfileValue('phone', session.user.phone || '');
-      setProfileValue('address', session.user.address || '');
-    } else {
-      setProfileError('Could not retrieve user profile data');
+      // Initialize form values from session
+      setProfileValue('phone', sessionUser.phone || '');
+      setProfileValue('address', sessionUser.address || '');
     }
   };
 
@@ -219,16 +218,30 @@ export default function ProfilePage() {
       setIsUpdatingProfile(true);
       setProfileError(null);
       setProfileSuccess(null);
-
-      const response = await userAPI.updateProfile(data);
       
-      if (response) {
-        setProfileSuccess('Profile updated successfully!');
-        // Refresh user data
-        fetchUserProfile();
-      } else {
-        setProfileError('Failed to update profile. Please try again.');
-      }
+      const updateData = {
+        phone: data.phone || undefined,
+        address: data.address || undefined,
+      };
+      
+      // Add location data if available
+      console.log('Updating profile with data:', updateData);
+      const response = await userAPI.updateProfile(updateData);
+      
+      console.log('Profile update response:', response);
+      setUserData(response);
+      
+      // Also update the session data
+      await updateSession({
+        ...session,
+        user: {
+          ...session?.user,
+          phone: response.phone,
+          address: response.address
+        }
+      });
+      
+      setProfileSuccess('Profile updated successfully!');
     } catch (error: any) {
       console.error('Error updating profile:', error);
       setProfileError(error.response?.data?.message || 'An error occurred while updating the profile. Please try again.');
@@ -242,10 +255,10 @@ export default function ProfilePage() {
       setIsChangingPassword(true);
       setPasswordError(null);
       setPasswordSuccess(null);
-
+      
       const response = await userAPI.changePassword(data.currentPassword, data.newPassword);
       
-      if (response && response.success) {
+      if (response.success) {
         setPasswordSuccess('Password changed successfully!');
         resetPasswordForm();
       } else {
@@ -258,96 +271,142 @@ export default function ProfilePage() {
       setIsChangingPassword(false);
     }
   };
-
-  // New function to handle private key retrieval
-  const handleGetPrivateKey = async (password: string) => {
+  
+  const handleProfilePictureUpload = async (file: File) => {
     try {
-      console.log('Attempting to get private key with password:', password);
-      if (!password || password.trim() === '') {
-        throw new Error('Password is required');
-      }
+      setIsUpdatingProfile(true);
+      setProfileError(null);
+      setProfileSuccess(null);
       
-      const response = await authAPI.getPrivateKey(password);
-      console.log('API Response:', response);
+      const response = await userAPI.uploadProfilePicture(file);
       
-      if (response && response.success && response.data?.privateKey) {
-        console.log('Setting private key:', response.data.privateKey);
-        setPrivateKey(response.data.privateKey);
-        setIsPasswordModalOpen(false);
-        setIsPrivateKeyModalOpen(true);
-      } else {
-        console.error('Invalid response format:', response);
-        throw new Error('Failed to retrieve private key');
-      }
-    } catch (error: any) {
-      console.error('Error retrieving private key:', error);
-      // Re-throw with more specific error message
-      if (error.response?.status === 401) {
-        throw new Error('Invalid password. Please try again.');
-      } else if (error.response?.status === 404) {
-        throw new Error('Wallet not found or not properly initialized. Please contact administrator.');
-      } else {
-        throw new Error(error.response?.data?.message || error.message || 'An error occurred while retrieving the private key');
-      }
-    }
-  };
-
-  // Handle role selection
-  const handleRoleSelected = async (role: string) => {
-    try {
-      console.log('Role selected:', role);
-      setIsLoading(true);
-      
-      // Update local userData first for immediate UI feedback
-      if (userData) {
+      if (response.success && response.data) {
+        // Update user data with new profile picture URL
         setUserData({
-          ...userData,
-          role: role as UserRole
+          ...userData!,
+          profilePicture: response.data.profilePicture
         });
-      }
-      
-      // Update session to reflect the new role - but don't reload the page
-      // This is a more controlled approach that won't lose the authentication state
-      if (session) {
-        console.log('Updating session with new role:', role);
+        
+        // Also update the session data
         await updateSession({
           ...session,
           user: {
-            ...session.user,
-            role
+            ...session?.user,
+            profilePicture: response.data.profilePicture
           }
         });
+        
+        setProfileSuccess('Profile picture updated successfully!');
+      } else {
+        setProfileError('Failed to upload profile picture. Please try again.');
       }
-      
-      // Close the modal
-      setIsRoleSelectionOpen(false);
-      
-      // Display a success message instead of reloading the page
-      setProfileSuccess(`Your role has been updated to ${role} successfully!`);
-      
-      // Refresh user data from the server to ensure it's up to date
-      await fetchUserProfile();
-    } catch (error) {
-      console.error('Error handling role selection:', error);
-      setProfileError('Failed to update role. Please try again.');
+    } catch (error: any) {
+      console.error('Error uploading profile picture:', error);
+      setProfileError(error.response?.data?.message || 'An error occurred while uploading the profile picture. Please try again.');
     } finally {
-      setIsLoading(false);
+      setIsUpdatingProfile(false);
     }
   };
-
+  
+  const handleGetPrivateKey = async (password: string): Promise<void> => {
+    try {
+      const response = await authAPI.getPrivateKey(password);
+      
+      if (response.success && response.data) {
+        setPrivateKey(response.data.privateKey);
+        setIsPasswordModalOpen(false);
+        setIsPrivateKeyModalOpen(true);
+        return;
+      }
+    } catch (error) {
+      console.error('Error retrieving private key:', error);
+    }
+  };
+  
+  const handleCopyWalletAddress = () => {
+    if (userData?.walletAddress) {
+      try {
+        navigator.clipboard.writeText(userData.walletAddress);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    }
+  };
+  
+  const handleRoleSelected = async (role: string) => {
+    try {
+      console.log(`Setting user role to: ${role}`);
+      const response = await userAPI.updateUserRole(role as UserRole);
+      
+      if (response.data.success) {
+        // Update user data
+        setUserData({
+          ...userData!,
+          role: role as UserRole
+        });
+        
+        // Also update the session data
+        await updateSession({
+          ...session,
+          user: {
+            ...session?.user,
+            role: role as UserRole,
+            needsRoleSelection: false
+          }
+        });
+        
+        // Close the modal
+        setIsRoleSelectionOpen(false);
+        
+        // Show success message
+        setProfileSuccess('Role updated successfully! Please refresh the page to see all new features.');
+      } else {
+        setProfileError('Failed to update role. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Error updating role:', error);
+      setProfileError(error.message || 'An error occurred while updating the role. Please try again.');
+    }
+  };
+  
   return (
     <ProtectedRoute skipRoleCheck={true}>
       <Web3Background />
       <div className="py-10 relative">
         <header>
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-2">
+            {/* Profile image */}
             <div className="relative group">
-              <div className="h-24 w-24 rounded-full bg-gradient-to-tr from-[#00ffcc] via-[#a259ff] to-[#00bfff] p-1 animate-glow">
-                <div className="h-full w-full rounded-full bg-gray-900 flex items-center justify-center text-4xl font-bold text-white font-orbitron shadow-[0_0_30px_#00ffcc55]">
-                  {userData?.name?.charAt(0) || session?.user?.name?.charAt(0) || 'U'}
+              {userData?.profilePicture ? (
+                <div className="h-32 w-32 rounded-full overflow-hidden bg-gradient-to-tr from-[#00ffcc] via-[#a259ff] to-[#00bfff] p-1.5 animate-glow shadow-[0_0_50px_rgba(0,255,204,0.4)]">
+                  <div className="h-full w-full rounded-full overflow-hidden">
+                    <ImageUpload 
+                      currentImageUrl={userData.profilePicture}
+                      onUpload={handleProfilePictureUpload}
+                      size="lg"
+                      shape="circle"
+                      className="w-full h-full"
+                    />
+                  </div>
                 </div>
-              </div>
-              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-xs rounded bg-[#232526] text-[#00ffcc] font-mono shadow-lg animate-fadeIn">
+              ) : (
+                <div className="h-32 w-32 rounded-full overflow-hidden bg-gradient-to-tr from-[#00ffcc] via-[#a259ff] to-[#00bfff] p-1.5 animate-glow shadow-[0_0_50px_rgba(0,255,204,0.4)]">
+                  <div className="h-full w-full rounded-full overflow-hidden bg-gray-900 flex items-center justify-center">
+                    <ImageUpload
+                      onUpload={handleProfilePictureUpload}
+                      size="lg" 
+                      shape="circle"
+                    >
+                      <span className="text-5xl font-bold text-white font-orbitron">
+                        {userData?.name?.charAt(0) || session?.user?.name?.charAt(0) || 'U'}
+                      </span>
+                    </ImageUpload>
+                  </div>
+                </div>
+              )}
+              <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 text-sm rounded bg-[#232526] text-[#00ffcc] font-mono shadow-lg animate-fadeIn border border-[#00ffcc33]">
                 {userData?.role || session?.user?.role || 'UNKNOWN'}
               </span>
             </div>
@@ -355,13 +414,31 @@ export default function ProfilePage() {
               {userData?.name || session?.user?.name}
             </h1>
             <p className="text-base text-[#a259ff] font-mono animate-fadeIn">{userData?.email || session?.user?.email}</p>
+            
+            {userData?.companyName && (
+              <p className="text-sm text-[#00ffcc] font-mono animate-fadeIn mt-1">{userData.companyName}</p>
+            )}
+            
+            {/* Success/error messages */}
+            {profileError && (
+              <div className="mt-4 p-3 bg-red-900 bg-opacity-50 border border-red-600 text-white rounded-lg text-sm animate-fadeIn">
+                {profileError}
+              </div>
+            )}
+            
+            {profileSuccess && (
+              <div className="mt-4 p-3 bg-[#00ffcc33] border border-[#00ffcc] text-white rounded-lg text-sm animate-fadeIn">
+                {profileSuccess}
+              </div>
+            )}
           </div>
         </header>
+        
         <main>
           <div className="max-w-3xl mx-auto sm:px-6 lg:px-8 mt-8">
             <div className="space-y-8">
               {/* Wallet Section - Cyberpunk Card */}
-              <div className="relative bg-gradient-to-br from-[#232526cc] to-[#0f2027cc] border-2 border-[#00ffcc] rounded-2xl shadow-[0_0_40px_#00ffcc33] p-6 overflow-hidden animate-fadeIn">
+              <div className="relative bg-gradient-to-br from-[#232526cc] to-[#0f2027cc] border border-[#00ffcc] rounded-2xl shadow-[0_0_40px_#00ffcc33] p-6 overflow-hidden animate-fadeIn">
                 <div className="absolute -inset-1.5 blur-2xl opacity-40 pointer-events-none bg-gradient-to-tr from-[#00ffcc] via-[#a259ff] to-[#00bfff] animate-gradient-move" />
                 <h4 className="text-lg font-bold text-white mb-1 font-orbitron tracking-wider flex items-center gap-2">
                   <span className="inline-block h-2 w-2 rounded-full bg-[#00ffcc] animate-pulse" />
@@ -372,16 +449,9 @@ export default function ProfilePage() {
                   <div>
                     <dt className="text-xs font-semibold text-[#a259ff] uppercase tracking-widest">Wallet Address</dt>
                     <dd className="mt-1 text-sm text-white font-mono break-all flex items-center gap-2 bg-[#232526] rounded px-3 py-2 border border-[#00bfff] shadow-inner hover:shadow-[0_0_10px_#00bfff77] transition-shadow duration-300 cursor-pointer group"
-                      onClick={async () => {
-                        const address = userData?.walletAddress || session?.user?.walletAddress || '';
-                        if (address) {
-                          await navigator.clipboard.writeText(address);
-                          setIsCopied(true);
-                          setTimeout(() => setIsCopied(false), 1500);
-                        }
-                      }}
+                      onClick={handleCopyWalletAddress}
                     >
-                      {userData?.walletAddress || session?.user?.walletAddress}
+                      {userData?.walletAddress}
                       <span className="relative">
                         <Copy className={clsx('h-4 w-4 transition-colors', isCopied ? 'text-[#00ffcc]' : 'text-[#a259ff] group-hover:text-[#00ffcc]')} />
                         {isCopied && (
@@ -435,7 +505,21 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <div className="text-xs text-[#a259ff] font-semibold uppercase mb-1">Phone</div>
-                    <div className="text-white font-mono">{userData?.phone || session?.user?.phone || 'Not specified'}</div>
+                    <div className="text-white font-mono flex items-center gap-2">
+                      {userData?.phone || session?.user?.phone || 'Not specified'}
+                      {userData?.phone && (
+                        <a 
+                          href={`https://wa.me/${userData.phone.replace(/\+/g, '').replace(/\s/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#00ffcc] hover:underline inline-flex items-center"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-1">
+                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M8.46 14.45L7.5 16.5C7.16 16.3 6.84 16.08 6.53 15.81C6.21 15.58 5.65 15.05 5.16 14.47C4.68 13.88 4.27 13.17 4 12.5C4.19 12.22 4.39 11.86 4.55 11.58C4.71 11.29 4.94 10.87 5.17 10.5H7.17C7.6 11.26 7.97 11.84 8.14 12.05C8.3 12.26 8.5 12.59 8.46 14.45M12 17.5C11.5 17.5 10.97 17.47 10.5 17.39C10.34 16.96 10.21 16.39 10.2 16C10.03 15.83 9.85 15.67 9.41 15.5C9.08 15.36 8.28 15.11 8 15C8.3 13.86 8.5 12.5 8.5 12.5C8.5 12.5 9.97 12.09 10.4 11.95C10.82 11.81 10.94 11.66 11.24 11.5C11.5 11.35 12.31 11.11 12.89 11.03C13 11.82 13 12.5 13 12.5C13 12.5 13.44 12.5 14.02 12.5C14.59 12.5 14.95 12.55 15.09 12.69C15.22 12.84 15.38 13.08 15.42 13.5H13.5C13.5 13.5 13.24 13.5 13 13.95V15H15.5C15.35 15.6 15.17 16.06 15.03 16.34C14.89 16.62 14.5 17.5 14.5 17.5H12Z" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-[#a259ff] font-semibold uppercase mb-1">Address</div>
@@ -446,94 +530,150 @@ export default function ProfilePage() {
 
               {/* Profile Update Form */}
               <div className="bg-gradient-to-br from-[#232526cc] to-[#0f2027cc] border border-[#00bfff] rounded-2xl shadow-[0_0_30px_#00bfff33] p-6 animate-fadeIn">
-                <h3 className="text-lg font-bold text-white font-orbitron mb-4 tracking-wider">Update Profile</h3>
-                <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6">
-                  <div>
-                    <label htmlFor="name" className="block text-xs font-semibold text-[#00bfff] uppercase mb-1">Full Name</label>
-                    <input
-                      type="text"
-                      id="name"
-                      {...registerProfile('name')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                    {profileErrors.name && (
-                      <p className="mt-1 text-xs text-red-400">{profileErrors.name.message}</p>
+                <div
+                  className="flex justify-between items-center cursor-pointer"
+                  onClick={() => setShowProfileUpdate(!showProfileUpdate)}
+                >
+                  <h3 className="text-lg font-bold text-white font-orbitron tracking-wider">Update Profile</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#00bfff]"
+                  >
+                    {showProfileUpdate ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
                     )}
-                  </div>
-                  <div>
-                    <label htmlFor="phone" className="block text-xs font-semibold text-[#00bfff] uppercase mb-1">Phone Number</label>
-                    <input
-                      type="text"
-                      id="phone"
-                      {...registerProfile('phone')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="address" className="block text-xs font-semibold text-[#00bfff] uppercase mb-1">Address</label>
-                    <textarea
-                      id="address"
-                      rows={3}
-                      {...registerProfile('address')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button type="submit" variant="primary" isLoading={isUpdatingProfile}
-                      className="bg-[#00bfff] text-white hover:bg-[#00ffcc] hover:text-[#232526] font-orbitron shadow-[0_0_10px_#00bfff55] transition-all duration-300">
-                      Update Profile
-                    </Button>
-                  </div>
-                </form>
+                  </Button>
+                </div>
+                
+                {showProfileUpdate && (
+                  <form onSubmit={handleSubmitProfile(onSubmitProfile)} className="space-y-6 mt-4">
+                    <div>
+                      <label htmlFor="phone" className="block text-xs font-semibold text-[#00bfff] uppercase mb-1">Phone Number (WhatsApp)</label>
+                      <input
+                        type="text"
+                        id="phone"
+                        {...registerProfile('phone')}
+                        className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
+                        placeholder="e.g. +6281234567890"
+                      />
+                      {userData?.phone && (
+                        <a 
+                          href={`https://wa.me/${userData.phone.replace(/\+/g, '').replace(/\s/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center text-xs text-[#00ffcc] hover:underline"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mr-1">
+                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2M8.46 14.45L7.5 16.5C7.16 16.3 6.84 16.08 6.53 15.81C6.21 15.58 5.65 15.05 5.16 14.47C4.68 13.88 4.27 13.17 4 12.5C4.19 12.22 4.39 11.86 4.55 11.58C4.71 11.29 4.94 10.87 5.17 10.5H7.17C7.6 11.26 7.97 11.84 8.14 12.05C8.3 12.26 8.5 12.59 8.46 14.45M12 17.5C11.5 17.5 10.97 17.47 10.5 17.39C10.34 16.96 10.21 16.39 10.2 16C10.03 15.83 9.85 15.67 9.41 15.5C9.08 15.36 8.28 15.11 8 15C8.3 13.86 8.5 12.5 8.5 12.5C8.5 12.5 9.97 12.09 10.4 11.95C10.82 11.81 10.94 11.66 11.24 11.5C11.5 11.35 12.31 11.11 12.89 11.03C13 11.82 13 12.5 13 12.5C13 12.5 13.44 12.5 14.02 12.5C14.59 12.5 14.95 12.55 15.09 12.69C15.22 12.84 15.38 13.08 15.42 13.5H13.5C13.5 13.5 13.24 13.5 13 13.95V15H15.5C15.35 15.6 15.17 16.06 15.03 16.34C14.89 16.62 14.5 17.5 14.5 17.5H12Z" />
+                          </svg>
+                          Open WhatsApp
+                        </a>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="address" className="block text-xs font-semibold text-[#00bfff] uppercase mb-1">Address</label>
+                      <textarea
+                        id="address"
+                        rows={3}
+                        {...registerProfile('address')}
+                        className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
+                      />
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <Button type="submit" variant="primary" isLoading={isUpdatingProfile}
+                        className="bg-[#00bfff] text-white hover:bg-[#00ffcc] hover:text-[#232526] font-orbitron shadow-[0_0_10px_#00bfff55] transition-all duration-300">
+                        Update Profile
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               {/* Password Change Form */}
               <div className="bg-gradient-to-br from-[#232526cc] to-[#0f2027cc] border border-[#00ffcc] rounded-2xl shadow-[0_0_30px_#00ffcc33] p-6 animate-fadeIn">
-                <h3 className="text-lg font-bold text-white font-orbitron mb-4 tracking-wider">Change Password</h3>
-                <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-6">
-                  <div>
-                    <label htmlFor="currentPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">Current Password</label>
-                    <input
-                      type="password"
-                      id="currentPassword"
-                      {...registerPassword('currentPassword')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                    {passwordErrors.currentPassword && (
-                      <p className="mt-1 text-xs text-red-400">{passwordErrors.currentPassword.message}</p>
+                <div
+                  className="flex justify-between items-center cursor-pointer"
+                  onClick={() => setShowPasswordUpdate(!showPasswordUpdate)}
+                >
+                  <h3 className="text-lg font-bold text-white font-orbitron tracking-wider">Change Password</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-[#00ffcc]"
+                  >
+                    {showPasswordUpdate ? (
+                      <ChevronUp className="h-5 w-5" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5" />
                     )}
-                  </div>
-                  <div>
-                    <label htmlFor="newPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">New Password</label>
-                    <input
-                      type="password"
-                      id="newPassword"
-                      {...registerPassword('newPassword')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                    {passwordErrors.newPassword && (
-                      <p className="mt-1 text-xs text-red-400">{passwordErrors.newPassword.message}</p>
+                  </Button>
+                </div>
+                
+                {showPasswordUpdate && (
+                  <>
+                    {passwordError && (
+                      <div className="mt-4 p-3 bg-red-900 bg-opacity-50 border border-red-600 text-white rounded-lg text-sm animate-fadeIn">
+                        {passwordError}
+                      </div>
                     )}
-                  </div>
-                  <div>
-                    <label htmlFor="confirmNewPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">Confirm New Password</label>
-                    <input
-                      type="password"
-                      id="confirmNewPassword"
-                      {...registerPassword('confirmNewPassword')}
-                      className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
-                    />
-                    {passwordErrors.confirmNewPassword && (
-                      <p className="mt-1 text-xs text-red-400">{passwordErrors.confirmNewPassword.message}</p>
+                    
+                    {passwordSuccess && (
+                      <div className="mt-4 p-3 bg-[#00ffcc33] border border-[#00ffcc] text-white rounded-lg text-sm animate-fadeIn">
+                        {passwordSuccess}
+                      </div>
                     )}
-                  </div>
-                  <div className="flex justify-end">
-                    <Button type="submit" variant="primary" isLoading={isChangingPassword}
-                      className="bg-[#00ffcc] text-[#232526] hover:bg-[#00bfff] hover:text-white font-orbitron shadow-[0_0_10px_#00ffcc55] transition-all duration-300">
-                      Change Password
-                    </Button>
-                  </div>
-                </form>
+                    
+                    <form onSubmit={handleSubmitPassword(onSubmitPassword)} className="space-y-6 mt-4">
+                      <div>
+                        <label htmlFor="currentPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">Current Password</label>
+                        <input
+                          type="password"
+                          id="currentPassword"
+                          {...registerPassword('currentPassword')}
+                          className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
+                        />
+                        {passwordErrors.currentPassword && (
+                          <p className="mt-1 text-xs text-red-400">{passwordErrors.currentPassword.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="newPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">New Password</label>
+                        <input
+                          type="password"
+                          id="newPassword"
+                          {...registerPassword('newPassword')}
+                          className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
+                        />
+                        {passwordErrors.newPassword && (
+                          <p className="mt-1 text-xs text-red-400">{passwordErrors.newPassword.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="confirmNewPassword" className="block text-xs font-semibold text-[#00ffcc] uppercase mb-1">Confirm New Password</label>
+                        <input
+                          type="password"
+                          id="confirmNewPassword"
+                          {...registerPassword('confirmNewPassword')}
+                          className="shadow-sm focus:ring-[#00ffcc] focus:border-[#00ffcc] block w-full sm:text-sm border-[#232526] bg-[#181a1b] text-white rounded-md px-3 py-2 font-mono"
+                        />
+                        {passwordErrors.confirmNewPassword && (
+                          <p className="mt-1 text-xs text-red-400">{passwordErrors.confirmNewPassword.message}</p>
+                        )}
+                      </div>
+                      <div className="flex justify-end">
+                        <Button type="submit" variant="primary" isLoading={isChangingPassword}
+                          className="bg-[#00ffcc] text-[#232526] hover:bg-[#00bfff] hover:text-white font-orbitron shadow-[0_0_10px_#00ffcc55] transition-all duration-300">
+                          Change Password
+                        </Button>
+                      </div>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           </div>

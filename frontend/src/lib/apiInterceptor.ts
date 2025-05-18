@@ -73,32 +73,84 @@ api.interceptors.response.use(
       if (!isRefreshing) {
         isRefreshing = true;
         console.log('Attempting to refresh token...');
-        refreshPromise = axios.get('/api/auth/refresh')
-          .then(response => {
-            console.log('Token refreshed successfully');
-            isRefreshing = false;
-            return response.data;
-          })
-          .catch(refreshError => {
-            console.error('Token refresh failed:', refreshError);
-            isRefreshing = false;
-            // If refresh fails, redirect to login
-            setTimeout(() => {
-              signOut({ callbackUrl: '/auth/login' });
-            }, 1000);
-            return Promise.reject(refreshError);
-          });
+        
+        // Check localStorage for fallback tokens first
+        const fallbackToken = localStorage.getItem('fallbackAuthToken') || 
+                              localStorage.getItem('walletAuthToken') || 
+                              localStorage.getItem('web3AuthToken');
+        
+        // If we have a fallback token, use it instead of trying to refresh
+        if (fallbackToken) {
+          console.log('Using fallback token instead of refreshing');
+          refreshPromise = Promise.resolve({ success: true, data: { token: fallbackToken } });
+          isRefreshing = false;
+        } else {
+          // Try to refresh the token through our API route
+          refreshPromise = axios.get('/api/auth/refresh')
+            .then(response => {
+              console.log('Token refreshed successfully', response.data);
+              isRefreshing = false;
+              return response.data;
+            })
+            .catch(refreshError => {
+              console.error('Token refresh failed:', refreshError);
+              isRefreshing = false;
+              
+              // Check for fallback auth methods before redirecting to login
+              const fallbackToken = localStorage.getItem('fallbackAuthToken') || 
+                                    localStorage.getItem('walletAuthToken') || 
+                                    localStorage.getItem('web3AuthToken');
+              
+              if (fallbackToken) {
+                console.log('Using fallback token after refresh failure');
+                return { success: true, data: { token: fallbackToken } };
+              }
+              
+              // If no fallback token is available, redirect to login
+              console.log('No fallback authentication found, redirecting to login');
+              setTimeout(() => {
+                signOut({ callbackUrl: '/auth/login' });
+              }, 1000);
+              return Promise.reject(refreshError);
+            });
+        }
       }
       
       try {
         // Wait for the refresh to complete
-        await refreshPromise;
+        const result = await refreshPromise;
         
-        // Retry the original request
-        const originalRequest = error.config;
-        return api(originalRequest);
+        if (result && result.success) {
+          // Get the new token
+          const newToken = result.data?.token;
+          
+          if (newToken) {
+            // Update the original request with the new token
+            const originalRequest = error.config;
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            
+            // Store the new token in session storage
+            const sessionData = sessionStorage.getItem('session');
+            if (sessionData) {
+              try {
+                const parsedSession = JSON.parse(sessionData);
+                parsedSession.accessToken = newToken;
+                sessionStorage.setItem('session', JSON.stringify(parsedSession));
+              } catch (e) {
+                console.error('Error updating session storage with new token', e);
+              }
+            }
+            
+            // Retry the original request with the new token
+            return api(originalRequest);
+          }
+        }
+        
+        // If we can't get a new token, reject the request
+        return Promise.reject(error);
       } catch (refreshError) {
         // If refresh fails, reject the original request
+        console.error('Error during refresh token process:', refreshError);
         return Promise.reject(error);
       }
     }
@@ -108,4 +160,4 @@ api.interceptors.response.use(
   }
 );
 
-export default api; 
+export default api;

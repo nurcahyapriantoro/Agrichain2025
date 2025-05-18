@@ -11,6 +11,7 @@ import NotificationRoute from "./NotificationRoute"
 import FormAuthRoute from "./Auth/FormAuthRoute";
 import GoogleAuthRoute from "./Auth/GoogleAuthRoute";
 import Web3AuthRoute from "./Auth/Web3AuthRoute";
+import WalletUserProfileRoute from "./User/WalletUserProfileRoute";
 
 const router = express.Router()
 
@@ -32,5 +33,6 @@ router.use("/notifications", NotificationRoute)
 router.use("/auth/form", FormAuthRoute);
 router.use("/auth/google", GoogleAuthRoute);
 router.use("/auth/web3", Web3AuthRoute);
+router.use("/user/wallet", WalletUserProfileRoute);
 
 export default router

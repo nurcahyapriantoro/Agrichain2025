@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-  try {
-    // Parse request body
+  try {    // Parse request body
     const data = await req.json();
-    const { name, role, address, signature, message, chainId } = data;
+    const { name, role, address, signature, message, chainId, tempToken } = data;
     
     console.log('Processing wallet registration:', { 
       name, 
       role, 
       address,
       messagePreview: message ? message.substring(0, 20) + '...' : 'none',
-      chainId
+      chainId,
+      hasTempToken: !!tempToken
     });
     
-    // Validate required fields
-    if (!name || !role || !address || !signature || !message) {
+    // Validate required fields - allow tempToken as alternative to signature/message
+    if (!name || !role || !address || (!signature && !tempToken) || (!message && !tempToken)) {
       console.error('Missing required fields:', {
         name: !!name,
         role: !!role,
         address: !!address,
         signature: !!signature,
-        message: !!message
+        message: !!message,
+        tempToken: !!tempToken
       });
       return NextResponse.json(
         { success: false, message: 'Missing required fields' },
@@ -33,8 +34,7 @@ export async function POST(req: NextRequest) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5010/api';
     console.log(`Connecting to backend API: ${apiUrl}/auth/web3/register`);
     
-    try {
-      const response = await fetch(`${apiUrl}/auth/web3/register`, {
+    try {      const response = await fetch(`${apiUrl}/auth/web3/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
           address,
           signature,
           message,
-          chainId
+          chainId,
+          tempToken
         }),
       });
       

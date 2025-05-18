@@ -207,6 +207,20 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Add more context to error objects
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      error.message = `API Error (${error.response.status}): ${error.response.data?.message || error.message}`;
+      error.apiStatus = error.response.status;
+      error.apiData = error.response.data;
+    } else if (error.request) {
+      // The request was made but no response was received
+      error.message = `API Request Error: No response received. Possible network issue.`;
+      error.networkError = true;
+    } 
+    // else the error was during request setup
+    
     if (error.response?.status === 401) {
       console.error('Authentication error:', error.response?.data);
       

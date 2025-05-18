@@ -37,21 +37,29 @@ export default function WalletRegisterPage() {
   const signature = searchParams.get('signature');
   const message = searchParams.get('message');
   const chainId = searchParams.get('chainId');
-  
-  useEffect(() => {
-    // Validate required parameters
-    if (!address || !signature || !message) {
+    useEffect(() => {
+    // Check for pending wallet registration data
+    const pendingRegistration = localStorage.getItem('pendingWalletRegistration');
+    const pendingWalletAddress = localStorage.getItem('pendingWalletAddress');
+    const tempWalletToken = localStorage.getItem('tempWalletToken');
+    
+    // Validate required parameters from URL or localStorage
+    if ((!address || !signature || !message) && !(pendingRegistration && tempWalletToken)) {
       setError('Missing required wallet information. Please try again.');
-      setDebugInfo(`Address: ${!!address}, Signature: ${!!signature}, Message: ${!!message}`);
-    } else if (chainId !== '0x531') {
+      setDebugInfo(`Address: ${!!address || !!pendingWalletAddress}, Signature: ${!!signature}, Message: ${!!message}, TempToken: ${!!tempWalletToken}`);
+    } else if (chainId !== '0x531' && !pendingRegistration) {
       setError('Incorrect network. Please switch to SEI Network.');
     } else {
-      console.log('Wallet parameters received:', {
-        address: address.substring(0, 6) + '...' + address.substring(address.length - 4),
-        signatureLength: signature.length,
-        messagePreview: message.substring(0, 20) + '...',
-        chainId
-      });
+      const displayAddress = address || pendingWalletAddress || 'Unknown';
+      if (displayAddress && displayAddress !== 'Unknown') {
+        console.log('Wallet parameters received:', {
+          address: displayAddress.substring(0, 6) + '...' + displayAddress.substring(displayAddress.length - 4),
+          signatureLength: signature ? signature.length : 'N/A',
+          messagePreview: message ? message.substring(0, 20) + '...' : 'N/A',
+          pendingRegistration: !!pendingRegistration,
+          chainId: chainId || 'N/A'
+        });
+      }
     }
   }, [address, signature, message, chainId]);
   
@@ -65,9 +73,14 @@ export default function WalletRegisterPage() {
       role: UserRole.FARMER,
     },
   });
-
   const onSubmit = async (data: WalletRegisterFormData) => {
-    if (!address || !signature || !message) {
+    // Get data from URL params or localStorage
+    const walletAddress = address || localStorage.getItem('pendingWalletAddress');
+    const walletSignature = signature;
+    const walletMessage = message;
+    const tempToken = localStorage.getItem('tempWalletToken');
+    
+    if ((!walletAddress || (!walletSignature && !tempToken) || (!walletMessage && !tempToken))) {
       setError('Missing required wallet information. Please try again.');
       return;
     }
@@ -80,7 +93,8 @@ export default function WalletRegisterPage() {
       console.log('Starting wallet registration with:', {
         name: data.name,
         role: data.role,
-        address: address.substring(0, 6) + '...' + address.substring(address.length - 4)
+        address: walletAddress ? walletAddress.substring(0, 6) + '...' + walletAddress.substring(walletAddress.length - 4) : 'Unknown',
+        tempToken: tempToken ? 'Present' : 'Not present'
       });
       
       // Register with wallet
@@ -92,10 +106,11 @@ export default function WalletRegisterPage() {
         body: JSON.stringify({
           name: data.name,
           role: data.role,
-          address,
-          signature,
-          message,
-          chainId
+          address: walletAddress,
+          signature: walletSignature,
+          message: walletMessage,
+          chainId,
+          tempToken // Include the temporary token for cases where user was redirected from login
         }),
       });
       
@@ -120,14 +135,17 @@ export default function WalletRegisterPage() {
         status: response.status,
         success: result.success,
         message: result.message
-      });
-      
-      if (response.ok && result.success) {
-        setSuccess('Registration successful! Redirecting to homepage...');
+      });        if (response.ok && result.success) {
+        setSuccess('Registration successful! Redirecting to complete your profile...');
+        
+        // Clear any pending registration data
+        localStorage.removeItem('pendingWalletRegistration');
+        localStorage.removeItem('pendingWalletAddress');
+        localStorage.removeItem('tempWalletToken');
         
         // Save wallet auth token and user data
         localStorage.setItem('walletAuthToken', result.token);
-        localStorage.setItem('walletAddress', address);
+        localStorage.setItem('walletAddress', walletAddress);
         localStorage.setItem('walletUserData', JSON.stringify({
           id: result.user.id,
           name: result.user.name,
@@ -136,8 +154,10 @@ export default function WalletRegisterPage() {
           authMethods: result.user.authMethods
         }));
         
-        // Immediately redirect to homepage
-        router.push('/');
+        // Redirect to complete profile page
+        setTimeout(() => {
+          router.push('/complete-profile');
+        }, 1500);
       } else {
         setError(result.message || 'Registration failed. Please try again.');
         if (result.details) {

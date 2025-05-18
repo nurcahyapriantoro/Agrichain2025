@@ -29,12 +29,10 @@ export async function GET(req: NextRequest) {
         { error: 'Unauthorized', message: 'No token in session' },
         { status: 401 }
       );
-    }
-
-    // Verify token with backend
+    }    // Verify token with backend
     try {
       console.log("Verifying token with backend");
-      const response = await fetch(`${apiUrl}/auth/verify-token`, {
+      const response = await fetch(`${apiUrl}/auth/form/verify-token`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -53,21 +51,18 @@ export async function GET(req: NextRequest) {
             token
           }
         });
-      }
-
-      // If we get here, token is invalid or expired - attempt to get a new one
+      }      // If we get here, token is invalid or expired - attempt to get a new one
       console.log("Token invalid, attempting refresh");
       
-      // This endpoint may not exist in your backend - if not, implement it or
-      // use your backend's refresh token flow instead
-      const refreshResponse = await fetch(`${apiUrl}/auth/refresh-token`, {
+      // Call our refresh token endpoint
+      const refreshResponse = await fetch(`${apiUrl}/auth/form/refresh-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           userId: session.user.id,
-          refreshToken: token // You may need a different token for refresh
+          refreshToken: token
         })
       });
 

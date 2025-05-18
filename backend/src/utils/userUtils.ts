@@ -49,8 +49,10 @@ export async function saveUserToDb(user: User): Promise<void> {
 export async function getUserById(userId: string): Promise<User | null> {
   try {
     const userData = await txhashDB.get(`user:${userId}`);
-    return JSON.parse(userData) as User;
+    // Check if userData is already an object or needs parsing
+    return typeof userData === 'object' ? userData : JSON.parse(userData) as User;
   } catch (error) {
+    console.error(`Error getting user by ID ${userId}:`, error);
     return null;
   }
 }
@@ -73,7 +75,11 @@ export async function getUserByWalletAddress(walletAddress: string): Promise<Use
     const normalizedAddress = walletAddress.toLowerCase().trim();
     const userId = await txhashDB.get(`user-wallet:${normalizedAddress}`);
     const userData = await txhashDB.get(`user:${userId}`);
-    return userData ? JSON.parse(userData) as User : null;
+    
+    if (!userData) return null;
+    
+    // Check if userData is already an object or needs parsing
+    return typeof userData === 'object' ? userData : JSON.parse(userData) as User;
   } catch (error) {
     console.error(`Error finding user by wallet address ${walletAddress}:`, error);
     return null;

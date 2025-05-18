@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { generateToken } from "../../../utils/jwtHelper";
-import { encryptPrivateKey, hashPassword, verifyPassword, decryptPrivateKey } from "../../../utils/encryption";
+import { encryptPrivateKey, decryptPrivateKey } from "../../../utils/encryption";
+import { hashPassword, comparePassword } from "../../../utils/passwordUtils";
 import { 
   User, 
   saveUserToDb, 
@@ -20,60 +21,65 @@ import {
 
 // Register new user
 const register = async (req: Request, res: Response) => {
-  const { email, password, name, role } = req.body;
-  if (!email || !password || !name || !role) {
-    return res.status(400).json({ success: false, message: "Missing required fields" });
+  try {
+    const { email, password, name, role } = req.body;
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+    const existingUser = await getUserByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: "Email already in use" });
+    }
+    const userId = generateUserId(role);
+    
+    // Generate a unique key pair for this user
+    const { privateKey, publicKey } = generateKeyPair();
+    
+    // Encrypt the private key with the user's password
+    const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
+    
+    // Hash the password for secure storage
+    const hashedPassword = await hashPassword(password);
+    
+    const newUser: User = {
+      id: userId,
+      email,
+      password: hashedPassword,
+      name,
+      role,
+      walletAddress: publicKey,
+      encryptedPrivateKey,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      authMethods: ['email']
+    };
+    await saveUserToDb(newUser);
+    
+    // Generate token for the new user
+    const token = generateToken({ id: userId, role: role });
+    
+    // Return user info (without sensitive data) and token
+    const userResponse = {
+      id: userId,
+      email,
+      name,
+      role,
+      walletAddress: publicKey,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      authMethods: ['email']
+    };
+    
+    res.status(201).json({ 
+      success: true, 
+      message: "User registered successfully",
+      token,
+      user: userResponse
+    });
+  } catch (error) {
+    console.error("Error registering user:", error);
+    res.status(500).json({ success: false, message: "Failed to register user" });
   }
-  const existingUser = await getUserByEmail(email);
-  if (existingUser) {
-    return res.status(400).json({ success: false, message: "Email already in use" });
-  }
-  const userId = generateUserId(role);
-  
-  // Generate a unique key pair for this user
-  const { privateKey, publicKey } = generateKeyPair();
-  
-  // Encrypt the private key with the user's password
-  const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
-  
-  // Hash the password for secure storage
-  const hashedPassword = hashPassword(password);
-  
-  const newUser: User = {
-    id: userId,
-    email,
-    password: hashedPassword,
-    name,
-    role,
-    walletAddress: publicKey,
-    encryptedPrivateKey,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    authMethods: ['email']
-  };
-  await saveUserToDb(newUser);
-  
-  // Generate token for the new user
-  const token = generateToken({ id: userId, role: role });
-  
-  // Return user info (without sensitive data) and token
-  const userResponse = {
-    id: userId,
-    email,
-    name,
-    role,
-    walletAddress: publicKey,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    authMethods: ['email']
-  };
-  
-  res.status(201).json({ 
-    success: true, 
-    message: "User registered successfully",
-    token,
-    user: userResponse
-  });
 };
 
 // Login user
@@ -84,13 +90,34 @@ const login = async (req: Request, res: Response) => {
     return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
   
-  // Verify password using our enhanced method
-  const isPasswordValid = verifyPassword(password, user.password);
+  // Check if the user has a password set (both regular users and wallet users with completed profiles)
+  if (!user.password) {
+    return res.status(401).json({ success: false, message: "Invalid credentials" });
+  }
+  
+  // Verify password using bcrypt compare
+  const isPasswordValid = await comparePassword(password, user.password);
   if (!isPasswordValid) {
     return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
   
-  const token = generateToken({ id: user.id, role: user.role });
+  // Generate a token with wallet address if it exists
+  type TokenPayload = {
+    id: string;
+    role: string;
+    walletAddress?: string;
+  };
+  
+  const tokenPayload: TokenPayload = { 
+    id: user.id, 
+    role: user.role 
+  };
+  
+  if (user.walletAddress) {
+    tokenPayload.walletAddress = user.walletAddress;
+  }
+  
+  const token = generateToken(tokenPayload);
   
   // Create a user response object without sensitive data
   const userResponse = {
@@ -101,7 +128,7 @@ const login = async (req: Request, res: Response) => {
     walletAddress: user.walletAddress,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    authMethods: user.authMethods,
+    authMethods: user.authMethods || [],
     isEmailVerified: user.isEmailVerified || false
   };
   
@@ -119,7 +146,12 @@ const changePassword = async (req: Request, res: Response) => {
   const { oldPassword, newPassword } = req.body;
   
   // Verify old password
-  if (!user || !verifyPassword(oldPassword, user.password)) {
+  if (!user) {
+    return res.status(401).json({ success: false, message: "Unauthorized" });
+  }
+  
+  const isValidPassword = await comparePassword(oldPassword, user.password);
+  if (!isValidPassword) {
     return res.status(401).json({ success: false, message: "Invalid old password" });
   }
   
@@ -129,7 +161,7 @@ const changePassword = async (req: Request, res: Response) => {
     const newEncryptedPrivateKey = encryptPrivateKey(privateKey, newPassword);
     
     // Update password and encrypted private key
-    user.password = hashPassword(newPassword);
+    user.password = await hashPassword(newPassword);
     user.encryptedPrivateKey = newEncryptedPrivateKey;
     user.updatedAt = Date.now();
     
@@ -226,7 +258,7 @@ const resetPassword = async (req: Request, res: Response) => {
     const encryptedPrivateKey = encryptPrivateKey(privateKey, password);
     
     // Update user data
-    user.password = hashPassword(password);
+    user.password = await hashPassword(password);
     user.walletAddress = publicKey;
     user.encryptedPrivateKey = encryptedPrivateKey;
     user.passwordResetToken = undefined;
@@ -241,6 +273,70 @@ const resetPassword = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error resetting password:", error);
     res.status(500).json({ success: false, message: "Failed to reset password" });
+  }
+};
+
+// Verify token
+const verifyToken = async (req: Request, res: Response) => {
+  // If request reaches here, the token is valid (checked by isAuthenticated middleware)
+  // Just return the user data from the request
+  res.json({ 
+    success: true, 
+    message: "Token is valid", 
+    data: {
+      user: req.user
+    }
+  });
+};
+
+// Refresh token
+const refreshToken = async (req: Request, res: Response) => {
+  const { userId, refreshToken } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "User ID is required" });
+  }
+  
+  try {
+    // Get user by ID
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+    
+    // Generate a new token with user data
+    const tokenPayload: { 
+      id: string; 
+      role: string; 
+      walletAddress?: string 
+    } = { 
+      id: user.id, 
+      role: user.role
+    };
+    
+    if (user.walletAddress) {
+      tokenPayload.walletAddress = user.walletAddress;
+    }
+    
+    const newToken = generateToken(tokenPayload);
+    
+    res.json({
+      success: true,
+      message: "Token refreshed successfully",
+      data: {
+        token: newToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          walletAddress: user.walletAddress,
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -266,5 +362,7 @@ export {
   requestPasswordReset, 
   resetPasswordForm, 
   resetPassword,
-  logout
+  logout,
+  verifyToken,
+  refreshToken
 };
