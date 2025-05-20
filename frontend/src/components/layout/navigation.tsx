@@ -111,7 +111,9 @@ export function Navigation() {
     if (typeof window !== 'undefined') {
       const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
       const walletUserDataString = localStorage.getItem('walletUserData');
+      const sessionString = sessionStorage.getItem('session');
       
+      // Check for wallet auth
       if (walletToken && walletUserDataString) {
         try {
           const userData = JSON.parse(walletUserDataString);
@@ -124,9 +126,18 @@ export function Navigation() {
         } catch (error) {
           console.error('Navigation: Error parsing wallet user data:', error);
         }
+      } 
+      // Reset wallet auth if no data found
+      else {
+        setWalletAuth({
+          token: null,
+          userData: null,
+          isAuthenticated: false
+        });
       }
     }
-  }, []);
+  // Add pathname to dependency array to re-run when route changes
+  }, [pathname]);
 
   if (!isMounted) {
     return null;
