@@ -246,6 +246,115 @@ const uploadProfilePicture = async (req: Request, res: Response) => {
   }
 };
 
+// Get users by role COLLECTOR
+const getUsersByRoleCollector = async (req: Request, res: Response) => {
+  try {
+    const allKeys = await txhashDB.keys().all();
+    const userKeys = allKeys.filter(key => key.startsWith('user:'));
+    
+    const userList = [];
+    for (const key of userKeys) {
+      try {
+        const userData = await txhashDB.get(key);
+        // Check if userData is already an object or needs parsing
+        const userObj = typeof userData === 'object' ? userData : JSON.parse(userData);
+        
+        // Filter only COLLECTOR role users
+        if (userObj.role === UserRole.COLLECTOR) {
+          userList.push({
+            id: userObj.id,
+            name: userObj.name || `User ${userObj.id.substring(0, 6)}`,
+            role: userObj.role,
+            email: userObj.email
+          });
+        }
+      } catch (parseError) {
+        console.error(`Error parsing user data for key ${key}:`, parseError);
+        // Continue processing other users
+      }
+    }
+    
+    res.json({ success: true, data: userList });
+  } catch (error) {
+    console.error("Error retrieving COLLECTOR users:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve COLLECTOR users" });
+  }
+};
+
+// Get users by role TRADER
+const getUsersByRoleTrader = async (req: Request, res: Response) => {
+  try {
+    const allKeys = await txhashDB.keys().all();
+    const userKeys = allKeys.filter(key => key.startsWith('user:'));
+    
+    const userList = [];
+    for (const key of userKeys) {
+      try {
+        const userData = await txhashDB.get(key);
+        // Check if userData is already an object or needs parsing
+        const userObj = typeof userData === 'object' ? userData : JSON.parse(userData);
+        
+        // Filter only TRADER role users
+        if (userObj.role === UserRole.TRADER) {
+          userList.push({
+            id: userObj.id,
+            name: userObj.name || `User ${userObj.id.substring(0, 6)}`,
+            role: userObj.role,
+            companyName: userObj.companyName || '',
+            location: userObj.address || '',
+            email: userObj.email
+          });
+        }
+      } catch (parseError) {
+        console.error(`Error parsing user data for key ${key}:`, parseError);
+        // Continue processing other users
+      }
+    }
+    
+    res.json({ success: true, data: userList });
+  } catch (error) {
+    console.error("Error retrieving TRADER users:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve TRADER users" });
+  }
+};
+
+// Get users by role RETAILER
+const getUsersByRoleRetailer = async (req: Request, res: Response) => {
+  try {
+    const allKeys = await txhashDB.keys().all();
+    const userKeys = allKeys.filter(key => key.startsWith('user:'));
+    
+    const userList = [];
+    for (const key of userKeys) {
+      try {
+        const userData = await txhashDB.get(key);
+        // Check if userData is already an object or needs parsing
+        const userObj = typeof userData === 'object' ? userData : JSON.parse(userData);
+        
+        // Filter only RETAILER role users
+        if (userObj.role === UserRole.RETAILER) {
+          userList.push({
+            id: userObj.id,
+            name: userObj.name || `User ${userObj.id.substring(0, 6)}`,
+            role: userObj.role,
+            companyName: userObj.companyName || '',
+            location: userObj.address || '',
+            email: userObj.email
+          });
+        }
+      } catch (parseError) {
+        console.error(`Error parsing user data for key ${key}:`, parseError);
+        // Continue processing other users
+      }
+    }
+    
+    res.json({ success: true, data: userList });
+  } catch (error) {
+    console.error("Error retrieving RETAILER users:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve RETAILER users" });
+  }
+};
+
 export { 
   getUserList, 
   getUser, 
@@ -263,5 +372,8 @@ export {
   getUserByEmail,
   getUserByWalletAddress,
   generateUserId,
-  generateKeyPair
+  generateKeyPair,
+  getUsersByRoleCollector,
+  getUsersByRoleTrader,
+  getUsersByRoleRetailer
 };

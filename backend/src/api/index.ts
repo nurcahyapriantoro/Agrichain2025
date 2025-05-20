@@ -180,6 +180,7 @@ const api = (
   app.use("/api/auth/google", GoogleAuthRoute)
   app.use("/api/auth/web3", Web3AuthRoute)
   app.use("/api/blockchain", BlockchainRoute)
+  app.use("/api/user", UserRoute)
   
   app.use(errorLogger)
   app.use(catch404Error)

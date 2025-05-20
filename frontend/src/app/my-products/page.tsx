@@ -99,33 +99,91 @@ export default function MyProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  
+  // Add wallet auth state
+  const [walletAuth, setWalletAuth] = useState<{
+    token: string | null;
+    userData: any;
+    isAuthenticated: boolean;
+  }>({
+    token: null,
+    userData: null,
+    isAuthenticated: false
+  });
+
+  // Check for wallet authentication
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Check for wallet authentication
+      const walletToken = localStorage.getItem('walletAuthToken') || localStorage.getItem('web3AuthToken');
+      const walletUserDataString = localStorage.getItem('walletUserData');
+      
+      if (walletToken && walletUserDataString) {
+        try {
+          const userData = JSON.parse(walletUserDataString);
+          setWalletAuth({
+            token: walletToken,
+            userData: userData,
+            isAuthenticated: true
+          });
+          console.log('MyProducts: Wallet auth detected', userData);
+        } catch (error) {
+          console.error('MyProducts: Error parsing wallet user data:', error);
+        }
+      }
+    }
+  }, []);
+
+  // Combined authentication check
+  const isAuthenticated = !!session?.user || walletAuth.isAuthenticated;
+  const userId = session?.user?.id || walletAuth.userData?.id;
+  const userRole = userData?.role || session?.user?.role as UserRole || walletAuth.userData?.role;
 
   // Effect to fetch user's products
   useEffect(() => {
     const fetchUserProducts = async () => {
-      if (session?.user?.id) {
-        try {
-          setIsLoading(true);
-          setError(null);
-          const response = await getProductsByOwner(session.user.id);
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Check if user is authenticated with either method
+        if (userId) {
+          console.log('Fetching products for user ID:', userId);
+          // User is authenticated, fetch their products
+          const response = await getProductsByOwner(userId);
           
-          if (response && response.products) {
+          console.log('API response:', response); // Debug the response
+          
+          // Check if the response has products in different formats
+          if (response?.products && Array.isArray(response.products)) {
+            console.log('Setting products from response.products:', response.products);
             setProducts(response.products);
+          } else if (response?.data?.products && Array.isArray(response.data.products)) {
+            console.log('Setting products from response.data.products:', response.data.products);
+            setProducts(response.data.products);
           } else {
+            console.log('No products found in response:', response);
             setProducts([]);
           }
-        } catch (err) {
-          console.error('Error fetching products:', err);
-          setError('Failed to load your products. Please try again.');
+        } else {
+          console.log('No user ID found in session or wallet auth');
           setProducts([]);
-        } finally {
-          setIsLoading(false);
         }
+      } catch (err) {
+        console.error('Error fetching products:', err);
+        setError('Failed to load your products. Please try again.');
+        setProducts([]);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchUserProducts();
-  }, [session?.user?.id]);
+    if (isAuthenticated) {
+      fetchUserProducts();
+    } else {
+      setIsLoading(false);
+    }
+  }, [userId, isAuthenticated]);
 
   // Function to open transfer modal for a product
   const handleTransferClick = (product: Product) => {
@@ -142,23 +200,34 @@ export default function MyProductsPage() {
   // Function to handle successful transfer
   const handleTransferSuccess = () => {
     // Refresh products after successful transfer
-    if (session?.user?.id) {
-      getProductsByOwner(session.user.id)
+    if (userId) {
+      // Show loading state while refreshing
+      setIsLoading(true);
+      
+      getProductsByOwner(userId)
         .then(response => {
-          if (response && response.products) {
+          if (response?.products && Array.isArray(response.products)) {
             setProducts(response.products);
+          } else if (response?.data?.products && Array.isArray(response.data.products)) {
+            setProducts(response.data.products);
           }
         })
         .catch(err => {
           console.error('Error refreshing products:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+          // Close the modal after refreshing
+          handleCloseTransferModal();
         });
+    } else {
+      // Just close the modal if there's no user ID
+      handleCloseTransferModal();
     }
-    handleCloseTransferModal();
   };
 
-  // Determine if user can transfer products based on their role
-  const userRole = userData?.role || session?.user?.role as UserRole;
-  const canTransfer = userRole && TRANSFER_FLOW[userRole] && TRANSFER_FLOW[userRole].length > 0;
+  // Simplify the canTransfer check to explicitly include these roles
+  const canTransfer = userRole && (userRole === UserRole.FARMER || userRole === UserRole.COLLECTOR || userRole === UserRole.TRADER);
 
   return (
     <div className="min-h-screen pb-20">
@@ -180,20 +249,17 @@ export default function MyProductsPage() {
           </div>
         )}
 
-        {!canTransfer && userRole && (
-          <div className="bg-yellow-900/30 border-l-4 border-yellow-500 p-4 mb-6 rounded-lg">
-            <div className="flex">
-              <Info className="h-5 w-5 text-yellow-500 mr-2" />
-              <p className="text-yellow-200">
-                {userRole === UserRole.RETAILER 
-                  ? "As a Retailer, you cannot transfer to other roles."
-                  : "Your role doesn't support transferring products in the supply chain."}
-              </p>
-            </div>
+        {!isAuthenticated && !isLoading ? (
+          // User is not authenticated
+          <div className="bg-slate-800/40 rounded-xl p-10 text-center">
+            <h3 className="text-xl text-gray-300 font-space mb-6">Please sign in to view your products</h3>
+            <Link href="/login">
+              <Button className="bg-gradient-to-r from-[#a259ff] to-[#00ffcc] hover:opacity-90 text-black font-bold">
+                Sign In
+              </Button>
+            </Link>
           </div>
-        )}
-
-        {isLoading ? (
+        ) : isLoading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-10 w-10 text-[#a259ff] animate-spin" />
           </div>
@@ -244,7 +310,7 @@ export default function MyProductsPage() {
                       </Button>
                     </Link>
                     
-                    {canTransfer && product.status !== ProductStatus.TRANSFERRED && (
+                    {canTransfer && (
                       <Button
                         onClick={() => handleTransferClick(product)}
                         className="bg-gradient-to-r from-[#a259ff] to-[#00ffcc] text-black font-bold hover:opacity-90"

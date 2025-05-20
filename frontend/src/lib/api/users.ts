@@ -39,8 +39,8 @@ export const updateUserRole = async (role: UserRole): Promise<{data: {success: b
 /**
  * Get users by role
  */
-export const getUsersByRole = async (role: string, page = 1, limit = 10): Promise<UserListResponse> => {
-  return apiGet<UserListResponse>('/user/role/' + role, { page, limit });
+export const getUsersByRole = async (role: string, page = 1, limit = 100): Promise<UserListResponse> => {
+  return apiGet<UserListResponse>(`/user/by-role/${role}`, { page, limit });
 };
 
 /**

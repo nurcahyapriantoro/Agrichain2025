@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { Toaster } from "@/components/ui/toaster";
-import { Navigation } from "@/components/layout/navigation";
+// import { Navigation } from "@/components/layout/navigation";
 import "../globals.css";
 
 const geistSans = Geist({
@@ -28,7 +28,6 @@ export default function AuthLayout({
   return (
     <AuthProvider>
       <div className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-br from-[#18122B] to-[#0f1722] min-h-screen flex flex-col`}>
-        <Navigation />
         <main className="flex-grow">
           {children}
         </main>

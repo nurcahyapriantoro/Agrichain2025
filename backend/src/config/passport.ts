@@ -25,7 +25,7 @@ declare global {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5010/api/auth/google/callback';
+const CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || '';
 
 type FindOrCreateUserFn = (
   profile: any,

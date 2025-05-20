@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input'; 
 import { Product } from '@/types/product';
 import { UserRole } from '@/types/user';
 import { transferProduct } from '@/lib/api/products';
-import { apiGet } from '@/lib/api/client';
-import { XCircle, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
+import { getUsersByRole } from '@/lib/api/users';
+import { XCircle, CheckCircle2, Loader2, AlertTriangle, Search, UserCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 // Define allowed transfer flows based on user roles
@@ -24,6 +25,7 @@ interface UserOption {
   name: string;
   role: string;
   location?: string;
+  companyName?: string;
 }
 
 interface TransferProductModalProps {
@@ -45,42 +47,83 @@ export default function TransferProductModal({
   const [success, setSuccess] = useState(false);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [fromUserId, setFromUserId] = useState<string>('');
   
-  const allowedRoles = TRANSFER_FLOW[userRole] || [];
+  // Get the allowed role for transfer based on current user role
+  const targetRole = TRANSFER_FLOW[userRole]?.[0] || null;
+
+  // Format role for display
+  const formatRoleTitle = (role: string) => {
+    return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() + 's';
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Try to get from session
+      const sessionData = JSON.parse(sessionStorage.getItem('session') || '{}');
+      let userId = sessionData?.user?.id;
+      
+      // If not available, try wallet auth
+      if (!userId) {
+        const walletUserData = JSON.parse(localStorage.getItem('walletUserData') || '{}');
+        userId = walletUserData?.id;
+      }
+      
+      if (userId) {
+        setFromUserId(userId);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const fetchUserOptions = async () => {
+      if (!targetRole) {
+        setUserOptions([]);
+        return;
+      }
+      
       setIsLoading(true);
       setError(null);
       
       try {
-        // Replace this with your actual API to get users by role
-        const promises = allowedRoles.map(role => 
-          apiGet<{success: boolean, data: UserOption[]}>(`/users/by-role/${role}`)
-        );
+        // Fetch users of the target role
+        const response = await getUsersByRole(targetRole);
+        console.log('Users by role response:', response);
         
-        const responses = await Promise.all(promises);
-        const allUsers: UserOption[] = [];
-        
-        responses.forEach(response => {
-          if (response.data && Array.isArray(response.data)) {
-            allUsers.push(...response.data);
-          }
-        });
-        
-        // Sort users alphabetically by name
-        allUsers.sort((a, b) => a.name.localeCompare(b.name));
-        setUserOptions(allUsers);
+        if (response && response.data && Array.isArray(response.data)) {
+          // Sort users alphabetically by name
+          const sortedUsers = [...response.data].sort((a, b) => a.name.localeCompare(b.name));
+          setUserOptions(sortedUsers);
+          console.log('Setting user options:', sortedUsers);
+        } else {
+          console.warn('Unexpected response format:', response);
+          setUserOptions([]);
+        }
       } catch (err) {
         console.error('Error fetching user options:', err);
         setError('Failed to load available recipients. Please try again.');
+        setUserOptions([]);
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchUserOptions();
-  }, [allowedRoles]);
+  }, [targetRole]);
+
+  // Filter users based on search query
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return userOptions;
+    
+    const query = searchQuery.toLowerCase();
+    return userOptions.filter(user => 
+      user.name.toLowerCase().includes(query) || 
+      user.id.toLowerCase().includes(query) ||
+      (user.companyName && user.companyName.toLowerCase().includes(query))
+    );
+  }, [userOptions, searchQuery]);
 
   const handleTransfer = async () => {
     if (!selectedUserId) {
@@ -88,11 +131,17 @@ export default function TransferProductModal({
       return;
     }
     
+    if (!fromUserId) {
+      setError('Unable to determine your user ID. Please refresh the page and try again.');
+      return;
+    }
+    
     setTransferLoading(true);
     setError(null);
     
     try {
-      const response = await transferProduct(product.id, selectedUserId);
+      // Pass fromUserId as third parameter and userRole as fourth parameter
+      const response = await transferProduct(product.id, selectedUserId, fromUserId, userRole);
       
       // Show success state
       setSuccess(true);
@@ -109,8 +158,16 @@ export default function TransferProductModal({
     }
   };
 
+
   const handleSelectUser = (userId: string) => {
     setSelectedUserId(userId);
+    setIsDropdownOpen(false);
+    
+    // Find the selected user and update the input value
+    const selected = userOptions.find(user => user.id === userId);
+    if (selected) {
+      setSearchQuery(selected.name);
+    }
   };
 
   // Get details of selected user if any
@@ -151,16 +208,24 @@ export default function TransferProductModal({
               <div className="bg-[#18122B] rounded-lg p-4 border border-[#a259ff40]">
                 <p className="text-white font-medium mb-1">{product.name}</p>
                 <p className="text-gray-400 text-sm mb-1">ID: {product.id}</p>
-                <p className="text-gray-400 text-sm">Quantity: {product.quantity} {product.unit || 'units'}</p>
+                <p className="text-gray-400 text-sm">Quantity: {product.quantity} {product.metadata?.unit || 'units'}</p>
               </div>
             </div>
             
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-[#00ffcc] mb-2">Transfer To</h3>
+              <h3 className="text-lg font-semibold text-[#00ffcc] mb-2">
+                Transfer To {targetRole ? formatRoleTitle(targetRole) : ''}
+              </h3>
               
               {isLoading ? (
                 <div className="flex justify-center items-center py-10">
                   <Loader2 className="h-8 w-8 text-[#a259ff] animate-spin" />
+                </div>
+              ) : !targetRole ? (
+                <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4">
+                  <p className="text-yellow-200 text-center">
+                    Your role cannot transfer products in the supply chain.
+                  </p>
                 </div>
               ) : userOptions.length === 0 ? (
                 <div className="bg-yellow-900/30 border border-yellow-500 rounded-lg p-4">
@@ -169,35 +234,71 @@ export default function TransferProductModal({
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {userOptions.map(user => (
-                    <motion.div
-                      key={user.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      onClick={() => handleSelectUser(user.id)}
-                      className={`p-4 rounded-lg cursor-pointer transition-all border-2 ${
-                        selectedUserId === user.id
-                          ? 'border-[#a259ff] bg-[#a259ff20]'
-                          : 'border-[#a259ff40] bg-[#18122B] hover:border-[#a259ff80]'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-white">{user.name}</p>
-                          <p className="text-sm text-gray-400">ID: {user.id}</p>
-                          <p className="text-sm text-gray-400">Role: {user.role}</p>
-                          {user.location && (
-                            <p className="text-sm text-gray-400">Location: {user.location}</p>
-                          )}
-                        </div>
-                        {selectedUserId === user.id && (
-                          <CheckCircle2 className="h-5 w-5 text-[#00ffcc]" />
+                <div className="relative">
+                  {/* Searchable Dropdown */}
+                  <div className="relative mb-4">
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        placeholder={`Search ${formatRoleTitle(targetRole)}...`}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onFocus={() => setIsDropdownOpen(true)}
+                        className="w-full bg-[#18122B] border-2 border-[#a259ff40] focus:border-[#a259ff] text-white py-2 pl-10 rounded-lg"
+                      />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      {selectedUser && (
+                        <CheckCircle2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#00ffcc]" />
+                      )}
+                    </div>
+                    
+                    {/* Dropdown */}
+                    {isDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full bg-[#232526] border-2 border-[#a259ff40] rounded-lg shadow-lg py-1 max-h-60 overflow-y-auto custom-scrollbar">
+                        {filteredUsers.length === 0 ? (
+                          <div className="px-4 py-2 text-gray-400 text-center">
+                            No matching {formatRoleTitle(targetRole)}
+                          </div>
+                        ) : (
+                          filteredUsers.map(user => (
+                            <div
+                              key={user.id}
+                              onClick={() => handleSelectUser(user.id)}
+                              className={`px-4 py-3 cursor-pointer transition-all ${
+                                selectedUserId === user.id
+                                  ? 'bg-[#a259ff20]'
+                                  : 'hover:bg-[#18122B]'
+                              }`}
+                            >
+                              <div className="flex items-center">
+                                <UserCircle className="h-5 w-5 text-gray-400 mr-2" />
+                                <div>
+                                  <p className="font-medium text-white">{user.name}</p>
+                                  <div className="flex text-xs text-gray-400">
+                                    <span className="mr-2">ID: {user.id}</span>
+                                    {user.companyName && (
+                                      <span className="ml-2">{user.companyName}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {selectedUserId === user.id && (
+                                  <CheckCircle2 className="h-5 w-5 text-[#00ffcc] ml-auto" />
+                                )}
+                              </div>
+                            </div>
+                          ))
                         )}
                       </div>
-                    </motion.div>
-                  ))}
+                    )}
+                  </div>
+                  
+                  {/* Close dropdown when clicking outside */}
+                  {isDropdownOpen && (
+                    <div 
+                      className="fixed inset-0 z-0"
+                      onClick={() => setIsDropdownOpen(false)}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -212,6 +313,16 @@ export default function TransferProductModal({
                 <p className="text-gray-300 text-sm">
                   You are about to transfer <span className="font-medium">{product.name}</span> to <span className="font-medium">{selectedUser.name}</span> ({selectedUser.role}).
                 </p>
+                {selectedUser.companyName && (
+                  <p className="text-gray-400 text-sm mt-1">
+                    Company: {selectedUser.companyName}
+                  </p>
+                )}
+                {selectedUser.location && (
+                  <p className="text-gray-400 text-sm mt-1">
+                    Location: {selectedUser.location}
+                  </p>
+                )}
               </motion.div>
             )}
             

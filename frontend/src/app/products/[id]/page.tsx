@@ -188,9 +188,11 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
+                  {/* Remove the Transfer button - comment out or delete this code block
                   {isOwner && (
                     <Button variant="primary" onClick={handleTransferClick} className="bg-[#00ffcc] text-[#18122B] font-orbitron hover:bg-[#a259ff] hover:text-white transition-all duration-300">Transfer</Button>
                   )}
+                  */}
                 </div>
               </div>
               {/* Product Details Card */}
