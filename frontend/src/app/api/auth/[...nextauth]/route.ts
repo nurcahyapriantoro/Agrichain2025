@@ -215,7 +215,7 @@ export const authOptions: NextAuthOptions = {
     maxAge: 24 * 60 * 60 // 24 hours
   },
   debug: true, // Aktifkan debug mode di development
-  secret: process.env.NEXTAUTH_SECRET || 'USE_ENV_SECRET_DO_NOT_HARDCODE',
+  secret: process.env.NEXTAUTH_SECRET || 'a-very-long-and-secure-secret-key-for-jwt-encryption-65fc4c6af7a18',
   cookies: {
     sessionToken: {
       name: `next-auth.session-token`,
